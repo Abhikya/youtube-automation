@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+.env
+*.json
+output/
+temp/
+*.mp4
+*.mp3
+temp_map.json
+token.pickle

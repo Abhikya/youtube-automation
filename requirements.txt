@@ -1,0 +1,11 @@
+openai
+moviepy
+requests
+python-telegram-bot
+schedule
+python-dotenv
+pydub
+ffmpeg-python
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
