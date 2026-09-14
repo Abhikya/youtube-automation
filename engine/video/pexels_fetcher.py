@@ -43,7 +43,8 @@ def download_pexels_clips(query, output_folder, max_clips=1):
         "orientation": "portrait"
     }
 
-    response = requests.get(PEXELS_URL, headers=headers, params=params)
+    response = requests.get(PEXELS_URL, headers=headers, params=params, timeout=(15, 90))
+    response.raise_for_status()
     data = response.json()
 
     clips = []
@@ -58,7 +59,9 @@ def download_pexels_clips(query, output_folder, max_clips=1):
         output_path = os.path.join(output_folder, file_name)
 
         # Download clip
-        video_data = requests.get(video_url).content
+        video_response = requests.get(video_url, timeout=(15, 180))
+        video_response.raise_for_status()
+        video_data = video_response.content
 
         # Save to cache
         with open(cache_path, "wb") as f:

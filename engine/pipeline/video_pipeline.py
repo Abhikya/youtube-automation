@@ -1,5 +1,8 @@
 import os
 
+from engine.uploader.youtube_uploader import upload_generated_video
+from engine.approval.telegram_bot import notify_generated_video
+
 from engine.generators.idea_generator import generate_video_ideas
 from engine.generators.script_generator import generate_script
 from engine.generators.metadata_generator import generate_metadata
@@ -14,6 +17,7 @@ from engine.video.video_editor import build_short_video
 from datetime import datetime
 
 from config.settings import (
+    BASE_CONTENT_TOPIC,
     TEMP_AUDIO_DIR,
     TEMP_CLIPS_DIR,
     OUTPUT_VIDEO_DIR,
@@ -22,9 +26,14 @@ from config.settings import (
 )
 
 
-def generate_video(topic: str,idea=None):
+def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True):
+    if topic != BASE_CONTENT_TOPIC:
+        raise ValueError(f"This automation only supports {BASE_CONTENT_TOPIC!r}.")
+
     if idea is None:
         ideas = generate_video_ideas(topic)
+        if not ideas:
+            raise ValueError("No mystery ideas were returned; no media was generated.")
         idea = ideas[0]
 
     script = generate_script(idea)
@@ -65,10 +74,15 @@ def generate_video(topic: str,idea=None):
 
     metadata = generate_metadata(script)
 
-    return {
+    result = {
         "topic": topic,
         "idea": idea,
         "script": script,
         "video_path": output_video_path,
-        "metadata": metadata
+        "metadata": metadata,
     }
+
+    if publish:
+        result["upload"] = upload_generated_video(output_video_path, metadata)
+        result["telegram"] = notify_generated_video(result)
+    return result

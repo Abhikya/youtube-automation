@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 
 # ==============================
 # BASE DIRECTORY (VERY IMPORTANT)
@@ -11,6 +12,19 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ==============================
 
 CHANNEL_NAME = "Minute Mysteries"
+BASE_CONTENT_TOPIC = "unsolved mysteries"
+
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+YOUTUBE_PRIVACY_STATUS = os.getenv("YOUTUBE_PRIVACY_STATUS", "private").strip().lower() or "private"
+YOUTUBE_CLIENT_SECRET_FILE = os.path.join(BASE_DIR, "client_secret.json")
+YOUTUBE_TOKEN_FILE = os.path.join(BASE_DIR, "token.pickle")
+
+SCHEDULER_TIMEZONE = "Asia/Kolkata"
+BATCH_GENERATION_TIME = "08:00"
+MISFIRE_GRACE_SECONDS = 15 * 60
+CLEANUP_AFTER_HOURS = 24
+CLEANUP_SCAN_DAYS = 8  # Today and the preceding seven India-time dates
+CLEANUP_MINUTE = 35  # Once per hour, away from publishing times
 
 SHORTS_PER_DAY = 3
 SHORT_DURATION = 40  # seconds

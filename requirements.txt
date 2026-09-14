@@ -9,3 +9,8 @@ ffmpeg-python
 google-api-python-client
 google-auth-oauthlib
 google-auth-httplib2
+APScheduler>=3.10,<4
+tzdata
+filelock>=3,<4
+fastapi
+uvicorn

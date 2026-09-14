@@ -10,7 +10,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 def generate_script(idea):
 
     prompt = f"""
-Write a 40 second YouTube Shorts script for this topic:
+Write a 40 second Mystery Shorts script about this unsolved mystery:
 
 {idea}
 
@@ -19,6 +19,10 @@ Rules:
 - Maximum curiosity
 - Around 80 words
 - Simple storytelling
+- Clearly distinguish known facts from theories and unresolved questions
+- Label speculation and folklore explicitly; never present them as confirmed fact
+- Do not invent evidence, quotes, or a definitive solution
+- Return only the spoken narration, without stage directions or headings
 """
 
     response = client.chat.completions.create(

@@ -1,124 +1,85 @@
+import logging
+import asyncio
 import os
+
 from dotenv import load_dotenv
-
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, Bot
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, ContextTypes
-
-from engine.uploader.youtube_uploader import upload_video
+from telegram import Bot
+from telegram.request import HTTPXRequest
 
 load_dotenv()
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-bot = Bot(token=BOT_TOKEN)
+async def send_video_notification(video_data):
+    """Send a preview after the upload attempt; never upload or request approval."""
+    try:
+        token = os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        if not token or not chat_id:
+            raise ValueError("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required.")
 
+        metadata = video_data["metadata"]
+        upload = video_data["upload"]
+        title = metadata["Title"]
+        if upload["success"]:
+            caption = (
+                "Uploaded successfully to YouTube\n\n"
+                f"Title: {title}\n"
+                f"Privacy: {upload['privacy_status']}\n"
+                f"YouTube: {upload['video_url']}"
+            )
+        else:
+            caption = (
+                "YouTube upload failed. Video retained locally.\n\n"
+                f"Title: {title}\n"
+                f"Error: {upload.get('error', 'Unknown upload error')}"
+            )
 
-# 🚀 SEND VIDEO
-async def send_video_for_approval(video_data):
-
-    video_path = video_data["video_path"]
-
-    # 🔥 short unique key (last 40 chars only)
-    short_path = video_path[-40:]
-
-    # 🔥 store mapping (TEMP FILE)
-    import json
-    TEMP_FILE = "temp_map.json"
-
-    if os.path.exists(TEMP_FILE):
-        with open(TEMP_FILE, "r") as f:
-            data = json.load(f)
-    else:
-        data = {}
-
-    data[short_path] = video_path
-
-    with open(TEMP_FILE, "w") as f:
-        json.dump(data, f)
-
-    title = video_data["metadata"]["Title"]
-    description = video_data["metadata"]["Description"]
-    hashtags = video_data["metadata"]["Hashtags"]
-
-    caption = f"""{title}
-
-{description}
-
-{' '.join(hashtags)}
-
-Approve?"""
-
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Approve", callback_data=f"approve|{short_path}"),
-            InlineKeyboardButton("❌ Reject", callback_data=f"reject|{short_path}"),
-        ]
-    ]
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    with open(video_path, "rb") as video:
-        await bot.send_video(
-            chat_id=CHAT_ID,
-            video=video,
-            caption=caption,
-            reply_markup=reply_markup,
+        # Keep captions comfortably below Telegram's limit, including Unicode.
+        caption = caption[:450]
+        request = HTTPXRequest(
+            connect_timeout=20,
+            read_timeout=120,
+            write_timeout=120,
+            pool_timeout=20,
+            media_write_timeout=180,
         )
+        # A fresh client is initialized and closed within this invocation's loop.
+        async with Bot(token=token, request=request) as bot:
+            with open(video_data["video_path"], "rb") as video:
+                message = await bot.send_video(
+                    chat_id=chat_id,
+                    video=video,
+                    caption=caption,
+                    connect_timeout=20,
+                    read_timeout=120,
+                    write_timeout=180,
+                    pool_timeout=20,
+                )
+        return {"success": True, "status": "sent", "message_id": message.message_id}
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Telegram notification failed")
+        return {
+            "success": False,
+            "status": "failed",
+            "error": str(exc),
+            "error_type": type(exc).__name__,
+        }
 
 
-# 🚀 HANDLE BUTTON
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    action, short_path = query.data.split("|")
-
-    import json
-    TEMP_FILE = "temp_map.json"
-
-    if not os.path.exists(TEMP_FILE):
-        await query.edit_message_caption("❌ Storage missing")
-        return
-
-    with open(TEMP_FILE, "r") as f:
-        data = json.load(f)
-
-    if short_path not in data:
-        await query.edit_message_caption("❌ Video not found")
-        return
-
-    video_path = data[short_path]
-
-    if not os.path.exists(video_path):
-        await query.edit_message_caption("❌ File missing")
-        return
-
-    if action == "approve":
-
-        await query.edit_message_caption("Uploading... 🚀")
-
-        upload_video(
-            video_path,
-            os.path.basename(video_path),
-            "Auto generated",
-            ["AI", "shorts"]
-        )
-
-        await query.edit_message_caption("✅ Uploaded!")
-
-    elif action == "reject":
-
-        await query.edit_message_caption("❌ Rejected")
-
-
-# 🚀 START BOT
 def start_bot():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    """Retain the old launcher without starting an approval listener."""
+    print("Telegram previews are sent by the video pipeline; no listener is needed.")
 
-    app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("Bot running...")
-
-    app.run_polling()
+def notify_generated_video(result):
+    """Notify about an existing upload outcome without generating or uploading."""
+    try:
+        return asyncio.run(send_video_notification(result))
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Telegram notification could not run")
+        return {
+            "success": False,
+            "status": "failed",
+            "error": str(exc),
+            "error_type": type(exc).__name__,
+        }

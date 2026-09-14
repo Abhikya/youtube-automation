@@ -2,7 +2,7 @@ import json
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
-from config.settings import IDEA_MEMORY_FILE
+from config.settings import BASE_CONTENT_TOPIC, IDEA_MEMORY_FILE
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -21,21 +21,26 @@ def save_memory(memory):
         json.dump(memory, f, indent=2)
 
 
-def generate_video_ideas(topic):
+def generate_video_ideas(topic=BASE_CONTENT_TOPIC):
+    if topic != BASE_CONTENT_TOPIC:
+        raise ValueError(f"This automation only supports {BASE_CONTENT_TOPIC!r}.")
 
     memory = load_memory()
 
     previous_ideas = memory.get(topic, [])
 
     prompt = f"""
-Generate 5 viral YouTube Shorts ideas about {topic}.
+Generate 5 Mystery Shorts ideas about {topic}.
 
 Rules:
 - DO NOT repeat these ideas:
 {previous_ideas}
 
 - Keep each idea under 12 words
-- Make them curiosity-driven
+- Make them curiosity-driven and suitable for YouTube Shorts
+- Focus on documented unsolved mysteries
+- Distinguish known facts from theories; label folklore as folklore
+- Do not invent evidence or present speculation as confirmed fact
 """
 
     response = client.chat.completions.create(

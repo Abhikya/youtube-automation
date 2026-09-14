@@ -9,7 +9,10 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def generate_metadata(script):
     prompt = f"""
-Generate YouTube Shorts metadata for this script.
+Generate curiosity-driven Mystery Shorts metadata for this script.
+Keep the title and description faithful to the script.
+Distinguish known facts from theories and label folklore where applicable.
+Do not turn speculation into confirmed facts or claim the mystery is solved.
 
 Return ONLY in this exact format:
 
