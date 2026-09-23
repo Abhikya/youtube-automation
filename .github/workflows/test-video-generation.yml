@@ -1,0 +1,76 @@
+name: Test single mystery video generation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-one-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+          ffmpeg -version
+
+      - name: Install existing Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Generate exactly one mystery video without publishing
+        id: generate
+        timeout-minutes: 35
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          FFMPEG_BINARY: /usr/bin/ffmpeg
+          IMAGEIO_FFMPEG_EXE: /usr/bin/ffmpeg
+          PYTHONUNBUFFERED: '1'
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          for name in ("OPENAI_API_KEY", "PEXELS_API_KEY"):
+              if not os.environ.get(name, "").strip():
+                  raise SystemExit(f"Missing GitHub Actions secret: {name}")
+
+          from engine.pipeline.video_pipeline import generate_video
+
+          # Existing local generation-only path: one call, no publishing or jobs.
+          result = generate_video(publish=False)
+          video = Path(result["video_path"])
+          if not video.is_file() or video.stat().st_size == 0:
+              raise RuntimeError("Generation did not produce a nonempty video file")
+          size = video.stat().st_size
+          print(f"Single video generation succeeded: {video.name} ({size:,} bytes)")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"size_bytes={size}\n")
+          PY
+
+      - name: Report generation outcome
+        if: always()
+        env:
+          GENERATION_OUTCOME: ${{ steps.generate.outcome }}
+          VIDEO_SIZE_BYTES: ${{ steps.generate.outputs.size_bytes }}
+        run: |
+          {
+            printf 'Single-video generation: %s\n\n' "${GENERATION_OUTCOME:-not run}"
+            printf 'Video size (bytes): %s\n' "${VIDEO_SIZE_BYTES:-unavailable}"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
