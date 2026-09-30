@@ -52,8 +52,13 @@ def notify_existing(result):
     return notify_generated_video(result)
 
 
+class CheckpointError(RuntimeError):
+    """Remote state was not confirmed; stop before any further side effects."""
+
+
 class DailyQueue:
-    def __init__(self, data_dir=DATA_DIR):
+    def __init__(self, data_dir=DATA_DIR, *, checkpoint=None):
+        self.checkpoint = checkpoint
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -91,6 +96,11 @@ class DailyQueue:
                 os.fsync(stream.fileno())
             os.replace(temporary, self.path(day))
             logger.info("Queue saved: %s", self.path(day))
+            if self.checkpoint is not None:
+                try:
+                    self.checkpoint(day, data)
+                except Exception as exc:
+                    raise CheckpointError("Durable queue checkpoint failed; manual review may be required") from exc
         finally:
             if temporary and os.path.exists(temporary):
                 os.unlink(temporary)
@@ -103,7 +113,7 @@ class DailyQueue:
                 self._write(day, changed)
             return changed
 
-    def generate_batch(self, day=None, generator=None, *, slots=None):
+    def generate_batch(self, day=None, generator=None, *, slots=None, resume=False, max_attempts=2):
         day = day or india_now().date()
         generator = generator or generate_only
         slots = list(UPLOAD_TIMES if slots is None else slots)
@@ -112,19 +122,29 @@ class DailyQueue:
         try:
             # Protect batches across threads AND independent scheduler processes.
             with FileLock(str(self.data_dir / "daily_generation.lock"), timeout=0):
-                if self.read(day) is not None:
+                existing = self.read(day)
+                if existing is not None and not resume:
                     logger.info("Batch already recorded for %s; skipping", day)
-                    return self.read(day)
+                    return existing
+                if existing is not None and [v["slot"] for v in existing["videos"]] != slots:
+                    raise ValueError("Existing batch slots do not match requested slots")
                 data = {"date": day.isoformat(), "timezone": SCHEDULER_TIMEZONE, "videos": [
                     {"slot": slot, "generation_status": "pending", "upload_status": "pending",
                      "video_path": None, "metadata": None, "idea": None, "script": None,
                      "youtube": None, "telegram": None, "generation_completed_at": None,
                      "generated_files": [], "cleanup": {"status": "pending"}} for slot in slots
                 ]}
-                self.update(day, lambda existing: data if existing is None else None)
-                logger.info("08:00 batch started for %s", day)
+                if existing is None:
+                    self.update(day, lambda existing: data if existing is None else None)
+                logger.info("Daily batch started for %s", day)
                 for index, slot in enumerate(slots, 1):
-                    self._set(day, slot, {"generation_status": "generating"})
+                    current = next(v for v in self.read(day)["videos"] if v["slot"] == slot)
+                    if current["generation_status"] == "ready" or current["upload_status"] != "pending":
+                        continue
+                    attempts = current.get("generation_attempts", 0)
+                    if attempts >= max_attempts:
+                        continue
+                    self._set(day, slot, {"generation_status": "generating", "generation_attempts": attempts + 1})
                     try:
                         result = generator()
                         completed_at = india_now().isoformat()
@@ -137,13 +157,16 @@ class DailyQueue:
                                       generation_completed_at=completed_at)
                         # Persist completion before fingerprinting; failures here must not
                         # turn a successfully generated video into a failed generation.
-                        self._set(day, slot, fields)
+                        if self.checkpoint is None:
+                            self._set(day, slot, fields)
                         try:
                             from engine.scheduling.cleanup import record_generated_file
                             fields["generated_files"] = [record_generated_file(result["video_path"], day, slot)]
                         except Exception as exc:
                             logger.exception("Video %s: cleanup ownership could not be recorded", index)
                             fields["cleanup"] = {"status": "rejected", "error": str(exc)}
+                    except CheckpointError:
+                        raise
                     except Exception as exc:
                         error = generation_error(exc)
                         logger.error("Video %s (%s) generation failed: %s", index, slot, error)
@@ -151,6 +174,8 @@ class DailyQueue:
                     self._set(day, slot, fields)
                     logger.info("Video %s (%s): %s", index, slot, fields["generation_status"])
                 return self.read(day)
+        except CheckpointError:
+            raise
         except Timeout:
             logger.warning("Generation already running; skipping batch")
             return None
@@ -246,7 +271,10 @@ class DailyQueue:
             youtube = {"success": False, "status": "failed", "error": str(exc), "error_type": type(exc).__name__}
         upload_status = "uploaded" if youtube["success"] else ("uncertain" if youtube.get("status") == "uncertain" else "failed")
         try:
-            self._set(day, slot, {"youtube": youtube, "upload_status": upload_status})
+            fields = {"youtube": youtube, "upload_status": upload_status}
+            if youtube["success"]:
+                fields["successful_upload_at"] = india_now().isoformat()
+            self._set(day, slot, fields)
         except Exception as exc:
             logger.error("%s: YouTube outcome could not be saved; persisted uploading state requires manual review", slot)
             return {"upload": youtube, "telegram": {"success": False, "status": "not_attempted"},

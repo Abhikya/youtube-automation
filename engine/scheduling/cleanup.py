@@ -48,13 +48,13 @@ def record_generated_file(video_path, day, slot):
 def _eligible(item, now):
     if item.get("generation_status") != "ready":
         return False
-    timestamp = item.get("generation_completed_at")
+    timestamp = item.get("successful_upload_at")
     try:
         completed = datetime.fromisoformat(timestamp)
         if completed.tzinfo is None or completed.utcoffset() is None:
             raise ValueError("Timestamp must include a timezone")
     except (TypeError, ValueError):
-        logger.info("%s: cleanup skipped; missing/invalid generation completion time", item.get("slot"))
+        logger.info("%s: cleanup skipped; missing/invalid successful upload time", item.get("slot"))
         return False
     if now - completed < timedelta(hours=CLEANUP_AFTER_HOURS):
         logger.info("%s: cleanup skipped; item too young", item.get("slot"))

@@ -34,6 +34,7 @@ class CleanupTests(unittest.TestCase):
         return {
             "slot": slot, "generation_status": "ready",
             "generation_completed_at": (NOW - timedelta(hours=26)).isoformat(),
+            "successful_upload_at": (NOW - timedelta(hours=25)).isoformat(),
             "upload_status": "uploaded", "video_path": str(path),
             "idea": "Idea", "script": "Script",
             "metadata": {"Title": "Title", "Description": "Description", "Hashtags": ["#Mystery"]},
@@ -55,7 +56,7 @@ class CleanupTests(unittest.TestCase):
         return self.queue.read(DAY)["videos"]
 
     def test_23_hours_not_deleted(self):
-        self.item["generation_completed_at"] = (NOW - timedelta(hours=23)).isoformat()
+        self.item["successful_upload_at"] = (NOW - timedelta(hours=23)).isoformat()
         self.save([self.item])
         self.run_cleanup()
         self.assertTrue(self.video.exists())
@@ -71,7 +72,7 @@ class CleanupTests(unittest.TestCase):
             self.assertEqual(saved[key], self.item[key])
 
     def test_exact_24_hour_boundary_allowed(self):
-        self.item["generation_completed_at"] = (NOW - timedelta(hours=24)).isoformat()
+        self.item["successful_upload_at"] = (NOW - timedelta(hours=24)).isoformat()
         self.save([self.item])
         self.run_cleanup()
         self.assertFalse(self.video.exists())
@@ -99,7 +100,7 @@ class CleanupTests(unittest.TestCase):
     def test_invalid_missing_naive_or_future_timestamp_not_deleted(self):
         for timestamp in [None, "invalid", "2026-09-15T08:00:00", (NOW + timedelta(days=1)).isoformat()]:
             with self.subTest(timestamp=timestamp):
-                self.item["generation_completed_at"] = timestamp
+                self.item["successful_upload_at"] = timestamp
                 self.save([self.item])
                 self.run_cleanup()
                 self.assertTrue(self.video.exists())

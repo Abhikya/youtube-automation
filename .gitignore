@@ -11,3 +11,9 @@ temp/
 
 data/daily_queue_*.json
 data/manual_tests/
+# Local credentials and Actions scratch files
+.env.*
+!.env.example
+token.json
+client_secret*.json
+.actions-work/
