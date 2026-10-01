@@ -365,15 +365,31 @@ class ProductionTests(unittest.TestCase):
         with self.assertRaisesRegex(ProductionError, 'fingerprint mismatch'):
             self.upload()
 
-    def test_workflow_dispatch_only_and_shared_concurrency(self):
+    def test_workflow_schedules_public_privacy_and_shared_concurrency(self):
         text = (Path(__file__).parent / '.github/workflows/production.yml').read_text(encoding='utf-8-sig')
         active = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
         self.assertIn('workflow_dispatch:', active)
-        self.assertNotIn('schedule:', active)
+        # Actions trigger times differ from the local scheduler's slot labels.
+        expected = [
+            ('5 5 * * *', 'generate', ''),
+            ('5 10 * * *', 'upload', '10:00'),
+            ('5 14 * * *', 'upload', '14:00'),
+            ('5 19 * * *', 'upload', '19:00'),
+            ('35 * * * *', 'cleanup', ''),
+        ]
+        schedule = active.split('  schedule:\n', 1)[1].split('\nconcurrency:', 1)[0]
+        entries = [line.strip() for line in schedule.splitlines() if line.strip()]
+        self.assertEqual(entries, [line for cron, _, _ in expected for line in
+                                  (f"- cron: '{cron}'", 'timezone: Asia/Kolkata')])
+        routing = active.split('const schedules = {', 1)[1].split('};', 1)[0]
+        self.assertEqual([line.strip() for line in routing.splitlines() if line.strip()],
+                         [f"'{cron}': ['{operation}', '{slot}']," for cron, operation, slot in expected])
+        self.assertIn('context.eventName === \'schedule\'', active)
+        self.assertIn('schedules[process.env.EVENT_SCHEDULE]', active)
         self.assertIn('group: mystery-production-state', active)
         self.assertIn('cancel-in-progress: false', active)
         self.assertNotIn('run_scheduler.py', active)
-        self.assertIn('YOUTUBE_PRIVACY_STATUS: private', active)
+        self.assertIn('YOUTUBE_PRIVACY_STATUS: public', active)
         self.assertNotIn('pull_request:', active)
 
 
