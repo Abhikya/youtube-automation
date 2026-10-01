@@ -6,7 +6,7 @@ GitHub concurrency group. State is append-only; a missing/ambiguous claim fails 
 import argparse
 import base64
 import copy
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import json
 import logging
 import os
@@ -21,7 +21,7 @@ import zipfile
 import requests
 
 from config.settings import BASE_DIR, UPLOAD_TIMES, YOUTUBE_PRIVACY_STATUS
-from engine.scheduling.daily_queue import DailyQueue, india_now, validate_metadata
+from engine.scheduling.daily_queue import CheckpointError, DailyQueue, india_now, validate_metadata
 from engine.scheduling.cleanup import _eligible, _fingerprint, _validated_target
 from collections import Counter
 
@@ -122,9 +122,40 @@ class GitHubArtifacts:
         require(not artifact.get('expired'), 'Required artifact has expired; do not regenerate/reupload blindly')
         return artifact
 
+    def newest_checkpoint(self, artifacts):
+        if not artifacts:
+            return None
+        # GitHub artifact IDs are identities, NOT chronological sequence numbers.
+        def created(artifact):
+            stamp = datetime.fromisoformat(artifact['created_at'].replace('Z', '+00:00'))
+            require(stamp.utcoffset() is not None, 'Checkpoint creation time must include a timezone')
+            return stamp
+        newest_time = max(map(created, artifacts))
+        candidates = [a for a in artifacts if created(a) == newest_time]
+        if len(candidates) == 1:
+            return self.trusted(candidates[0])
+        # REST timestamps have second precision. Never break a tie by artifact ID:
+        # use the existing predecessor chain, or fail closed on competing heads.
+        parents = {}
+        with tempfile.TemporaryDirectory() as directory:
+            for artifact in candidates:
+                path = Path(directory) / 'state.json'
+                self.download(self.trusted(artifact), 'state.json', path)
+                parents[artifact['id']] = json.loads(path.read_text(encoding='utf-8'))['previous_state_id']
+        heads = set(parents) - set(parents.values())
+        require(len(heads) == 1, 'Ambiguous checkpoint order; manual state review required')
+        head = next(iter(heads))
+        visited, cursor = set(), head
+        while cursor in parents and cursor not in visited:
+            visited.add(cursor)
+            cursor = parents[cursor]
+        require(len(visited) == len(parents) and cursor not in visited,
+                'Ambiguous checkpoint chain; manual state review required')
+        return self.trusted(next(a for a in candidates if a['id'] == head))
+
     def latest(self, day):
         matches = [a for a in self.artifacts() if a['name'].startswith(f'{STATE_PREFIX}{day}-')]
-        return self.trusted(max(matches, key=lambda a: a['id'])) if matches else None
+        return self.newest_checkpoint(matches)
 
     def by_id(self, artifact_id, run_id):
         artifact = self.api_request('GET', f'actions/artifacts/{artifact_id}').json()
@@ -273,7 +304,7 @@ class Production:
             previous = [a for a in self.store.artifacts() if a['name'].startswith(STATE_PREFIX)
                         and a['name'][len(STATE_PREFIX):len(STATE_PREFIX) + 10] < str(self.day)]
             if previous:
-                latest = max(previous, key=lambda a: a['id'])
+                latest = self.store.newest_checkpoint(previous)
                 path = self.scratch / 'previous-state.json'
                 self.store.download(latest, 'state.json', path)
                 previous_state = json.loads(path.read_text(encoding='utf-8'))
@@ -431,7 +462,11 @@ def main():
         return 0
     except Exception as exc:
         # Never print arbitrary network/auth exception strings (they may contain credentials).
-        message = str(exc) if isinstance(exc, ProductionError) else f'{type(exc).__name__}; inspect saved queue/artifact state'
+        cause = exc.__cause__ if isinstance(exc, CheckpointError) else exc
+        # ProductionError messages are deliberately credential-free. Preserve a
+        # wrapped validation diagnosis, without exposing arbitrary SDK exceptions.
+        message = (f'{type(exc).__name__}: {cause}' if isinstance(cause, ProductionError)
+                   else f'{type(exc).__name__}; inspect saved queue/artifact state')
         print(f'Production failed: {message}')
         if os.getenv('GITHUB_STEP_SUMMARY'):
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:

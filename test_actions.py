@@ -26,9 +26,11 @@ class Store:
     def artifacts(self):
         return [copy.deepcopy(a) for a in self.saved if a['id'] not in self.deleted]
 
-    def latest(self, day):
-        matches = [a for a in self.artifacts() if a['name'].startswith(f'mystery-state-{day}-')]
-        return max(matches, key=lambda a: a['id']) if matches else None
+    latest = GitHubArtifacts.latest
+    newest_checkpoint = GitHubArtifacts.newest_checkpoint
+
+    def trusted(self, artifact):
+        return artifact
 
     def by_id(self, artifact_id, run_id):
         item = next((a for a in self.artifacts() if a['id'] == artifact_id), None)
@@ -37,7 +39,9 @@ class Store:
         return item
 
     def upload(self, name, path, retention):
-        result = {'id': len(self.saved) + 1, 'name': name, 'workflow_run': {'id': self.run_id},
+        result = {'id': next(self.artifact_ids) if hasattr(self, 'artifact_ids') else len(self.saved) + 1,
+                  'created_at': (datetime(2026, 9, 14, tzinfo=TZ) + timedelta(seconds=len(self.saved))).isoformat(),
+                  'name': name, 'workflow_run': {'id': self.run_id},
                   'filename': Path(path).name, 'bytes': Path(path).read_bytes(), 'retention': retention}
         self.saved.append(result)
         return copy.deepcopy(result)
@@ -85,6 +89,44 @@ class ProductionTests(unittest.TestCase):
         controller = controller or self.fresh()
         return controller.upload(slot, 100, uploader or Mock(return_value=self.success),
                                  notifier or Mock(return_value={'success': True, 'status': 'sent'}))
+
+    def test_nonmonotonic_artifact_ids_do_not_poison_next_slot(self):
+        # Actual ordering from run 36843732075: the ready receipt has a lower
+        # ID than the earlier generating receipt. The old max(id) fails at slot 14.
+        self.store.artifact_ids = iter([11152483137, 11152862308, 11152792280,
+                                        11152796891, *range(11153000000, 11153000020)])
+        self.generated()
+        self.assertEqual(self.count, 3)
+        self.assertFalse(self.controller.poisoned)
+        first = self.controller.state['queue']['videos'][0]
+        self.assertEqual(first['slot'], '10:00')
+        self.assertEqual(first['generated_files'][0]['artifact_id'], 11152792280)
+        self.assertEqual(self.controller.state['generation_run_id'], 100)
+        self.fresh().generate(Mock(side_effect=AssertionError('Must reuse rendered MP4s')))
+        self.assertEqual(sum(a['name'].startswith('mystery-media-') for a in self.store.saved), 3)
+
+    def test_lower_id_ready_receipt_restores_existing_slot_without_generation(self):
+        self.generated()
+        latest = self.store.latest(DAY)
+        latest['id'] = 11152796891
+        latest['created_at'] = '2026-10-01T09:41:45Z'
+        old = copy.deepcopy(latest)
+        old.update(id=11152862308, created_at='2026-10-01T09:36:57Z')
+        old_state = json.loads(old['bytes'])
+        old_state['queue']['videos'][0]['generation_status'] = 'generating'
+        old['bytes'] = json.dumps(old_state).encode()
+        self.store.saved.extend([old, latest])
+        other = self.fresh()
+        with patch.object(DailyQueue, 'generate_batch', side_effect=AssertionError('No regeneration')):
+            other.load(100)
+            other.restore_media(['10:00'])
+        self.assertEqual(other.latest_id, 11152796891)
+        item = other.queue.read(DAY)['videos'][0]
+        self.assertEqual(item['slot'], '10:00')
+        self.assertEqual(item['generation_status'], 'ready')
+        self.assertEqual(item['metadata'], self.metadata)
+        self.assertEqual(Path(item['video_path']).read_bytes(), b'fixture media 1')
+        self.assertEqual(other.state['generation_run_id'], 100)
 
     def test_three_slots_exact_metadata_and_no_second_batch(self):
         self.generated()
@@ -341,10 +383,34 @@ class ArtifactTrustTests(unittest.TestCase):
         self.store.repo, self.store.branch = 'owner/repo', 'main'
         self.store.verified_runs = set()
         self.artifact = {'id': 7, 'name': f'mystery-state-{DAY}-1-x',
-                         'workflow_run': {'id': 1}, 'expired': False}
+                         'workflow_run': {'id': 1}, 'expired': False, 'created_at': '2026-10-01T09:36:57Z'}
         self.run = {'path': '.github/workflows/production.yml', 'head_branch': 'main',
                     'event': 'workflow_dispatch', 'head_repository': {'full_name': 'owner/repo'}}
         self.store.api_request = Mock(return_value=Mock(json=lambda: self.run))
+
+    def test_actual_run_creation_times_override_larger_older_id(self):
+        old = {**self.artifact, 'id': 11152862308}
+        newest = {**self.artifact, 'id': 11152796891, 'created_at': '2026-10-01T09:41:45Z'}
+        self.store.artifacts = Mock(return_value=[old, newest])
+        self.assertEqual(self.store.latest(DAY)['id'], newest['id'])
+        self.assertEqual(self.store.newest_checkpoint([old, newest])['id'], newest['id'])
+
+    def test_equal_timestamps_use_predecessors_not_id_order(self):
+        old = {**self.artifact, 'id': 900}
+        newest = {**self.artifact, 'id': 800}
+        self.store.artifacts = Mock(return_value=[old, newest])
+        def download(artifact, name, path):
+            Path(path).write_text(json.dumps({'previous_state_id': 900 if artifact['id'] == 800 else 700}))
+        self.store.download = Mock(side_effect=download)
+        self.assertEqual(self.store.latest(DAY)['id'], 800)
+
+    def test_equal_timestamp_competing_heads_fail_closed(self):
+        self.store.artifacts = Mock(return_value=[self.artifact, {**self.artifact, 'id': 6}])
+        def download(artifact, name, path):
+            Path(path).write_text(json.dumps({'previous_state_id': 5}))
+        self.store.download = Mock(side_effect=download)
+        with self.assertRaisesRegex(ProductionError, 'Ambiguous checkpoint order'):
+            self.store.latest(DAY)
 
     def test_wrong_workflow_branch_event_or_repository_rejected(self):
         for key, value in [('path', '.github/workflows/test-video-generation.yml'),
@@ -358,7 +424,7 @@ class ArtifactTrustTests(unittest.TestCase):
                 self.run[key] = original
 
     def test_expired_newest_state_does_not_fall_back_to_old_ready_state(self):
-        newest = {**self.artifact, 'id': 8, 'expired': True}
+        newest = {**self.artifact, 'id': 6, 'expired': True, 'created_at': '2026-10-01T09:41:45Z'}
         self.store.artifacts = Mock(return_value=[self.artifact, newest])
         with self.assertRaisesRegex(ProductionError, 'expired'):
             self.store.latest(DAY)
