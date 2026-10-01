@@ -22,15 +22,15 @@ on:
         description: 'For manual upload: original generation run ID from its summary'
         required: false
         type: string
-  # 05:00 provides a three-hour window before the 08:00 completion deadline.
+  # 05:05 provides a 2-hour 55-minute window before the 08:00 completion deadline.
   schedule:
-    - cron: '0 5 * * *'
+    - cron: '5 5 * * *'
       timezone: Asia/Kolkata
-    - cron: '0 10 * * *'
+    - cron: '5 10 * * *'
       timezone: Asia/Kolkata
-    - cron: '0 14 * * *'
+    - cron: '5 14 * * *'
       timezone: Asia/Kolkata
-    - cron: '0 19 * * *'
+    - cron: '5 19 * * *'
       timezone: Asia/Kolkata
     - cron: '35 * * * *'
       timezone: Asia/Kolkata
@@ -66,7 +66,7 @@ jobs:
       - name: Install project dependencies
         run: python -m pip install -r requirements.txt
       - name: Install FFmpeg for generation
-        if: inputs.operation == 'generate' || github.event.schedule == '0 5 * * *'
+        if: inputs.operation == 'generate' || github.event.schedule == '5 5 * * *'
         run: |
           sudo apt-get update
           sudo apt-get install --yes ffmpeg
@@ -82,12 +82,12 @@ jobs:
           INPUT_SLOT: ${{ inputs.slot }}
           INPUT_GENERATION_RUN: ${{ inputs.generation_run }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}
-          OPENAI_API_KEY: ${{ (inputs.operation == 'generate' || github.event.schedule == '0 5 * * *') && secrets.OPENAI_API_KEY || '' }}
-          PEXELS_API_KEY: ${{ (inputs.operation == 'generate' || github.event.schedule == '0 5 * * *') && secrets.PEXELS_API_KEY || '' }}
-          YOUTUBE_TOKEN_PICKLE_B64: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '0 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.YOUTUBE_TOKEN_PICKLE_B64 || '' }}
-          TELEGRAM_BOT_TOKEN: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '0 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_BOT_TOKEN || '' }}
-          TELEGRAM_CHAT_ID: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '0 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_CHAT_ID || '' }}
-          YOUTUBE_PRIVACY_STATUS: private
+          OPENAI_API_KEY: ${{ (inputs.operation == 'generate' || github.event.schedule == '5 5 * * *') && secrets.OPENAI_API_KEY || '' }}
+          PEXELS_API_KEY: ${{ (inputs.operation == 'generate' || github.event.schedule == '5 5 * * *') && secrets.PEXELS_API_KEY || '' }}
+          YOUTUBE_TOKEN_PICKLE_B64: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.YOUTUBE_TOKEN_PICKLE_B64 || '' }}
+          TELEGRAM_BOT_TOKEN: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_BOT_TOKEN || '' }}
+          TELEGRAM_CHAT_ID: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_CHAT_ID || '' }}
+          YOUTUBE_PRIVACY_STATUS: public
           FFMPEG_BINARY: /usr/bin/ffmpeg
           IMAGEIO_FFMPEG_EXE: /usr/bin/ffmpeg
           PYTHONUNBUFFERED: '1'
@@ -96,10 +96,10 @@ jobs:
             // A JavaScript action supplies the runtime credentials required by the
             // official artifact client. The child inherits them without printing them.
             const schedules = {
-              '0 5 * * *': ['generate', ''],
-              '0 10 * * *': ['upload', '10:00'],
-              '0 14 * * *': ['upload', '14:00'],
-              '0 19 * * *': ['upload', '19:00'],
+              '5 5 * * *': ['generate', ''],
+              '5 10 * * *': ['upload', '10:00'],
+              '5 14 * * *': ['upload', '14:00'],
+              '5 19 * * *': ['upload', '19:00'],
               '35 * * * *': ['cleanup', ''],
             };
             const selected = context.eventName === 'schedule'
