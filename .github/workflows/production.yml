@@ -22,19 +22,18 @@ on:
         description: 'For manual upload: original generation run ID from its summary'
         required: false
         type: string
-  # Enable ONLY after a complete manual private end-to-end test.
   # 05:00 provides a three-hour window before the 08:00 completion deadline.
-  # schedule:
-  #   - cron: '0 5 * * *'
-  #     timezone: Asia/Kolkata
-  #   - cron: '0 10 * * *'
-  #     timezone: Asia/Kolkata
-  #   - cron: '0 14 * * *'
-  #     timezone: Asia/Kolkata
-  #   - cron: '0 19 * * *'
-  #     timezone: Asia/Kolkata
-  #   - cron: '35 * * * *'
-  #     timezone: Asia/Kolkata
+  schedule:
+    - cron: '0 5 * * *'
+      timezone: Asia/Kolkata
+    - cron: '0 10 * * *'
+      timezone: Asia/Kolkata
+    - cron: '0 14 * * *'
+      timezone: Asia/Kolkata
+    - cron: '0 19 * * *'
+      timezone: Asia/Kolkata
+    - cron: '35 * * * *'
+      timezone: Asia/Kolkata
 
 # One shared group for ALL dates and operations. Do not change to a per-run group.
 # GitHub can replace pending runs; a replacement must be re-dispatched if needed.
