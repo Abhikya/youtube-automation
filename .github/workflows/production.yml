@@ -87,7 +87,7 @@ jobs:
           YOUTUBE_TOKEN_PICKLE_B64: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.YOUTUBE_TOKEN_PICKLE_B64 || '' }}
           TELEGRAM_BOT_TOKEN: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_BOT_TOKEN || '' }}
           TELEGRAM_CHAT_ID: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_CHAT_ID || '' }}
-          YOUTUBE_PRIVACY_STATUS: public
+          YOUTUBE_PRIVACY_STATUS: private
           FFMPEG_BINARY: /usr/bin/ffmpeg
           IMAGEIO_FFMPEG_EXE: /usr/bin/ffmpeg
           PYTHONUNBUFFERED: '1'
