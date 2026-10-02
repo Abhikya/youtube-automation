@@ -55,6 +55,18 @@ class CleanupTests(unittest.TestCase):
     def stored(self):
         return self.queue.read(DAY)["videos"]
 
+    def test_current_day_queue_and_media_are_never_cleaned(self):
+        item = copy.deepcopy(self.item)
+        item['generated_files'] = [record_generated_file(str(self.video), NOW.date(), '10:00')]
+        self.queue.update(DAY, lambda data: {**data, 'videos': []})
+        # No other reference can mask accidental cleanup of today's item.
+        self.queue.update(NOW.date(), lambda _: {
+            'date': NOW.date().isoformat(), 'timezone': 'Asia/Kolkata', 'videos': [item]})
+        before = self.queue.path(NOW.date()).read_bytes()
+        self.run_cleanup()
+        self.assertTrue(self.video.exists())
+        self.assertEqual(self.queue.path(NOW.date()).read_bytes(), before)
+
     def test_23_hours_not_deleted(self):
         self.item["successful_upload_at"] = (NOW - timedelta(hours=23)).isoformat()
         self.save([self.item])

@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Production operation (no automatic schedule enabled)
+        description: Production operation; explicit day enables generation recovery
         required: true
         type: choice
         options: [generate, upload, cleanup]
@@ -26,13 +26,13 @@ on:
   schedule:
     - cron: '5 5 * * *'
       timezone: Asia/Kolkata
-    - cron: '5 10 * * *'
+    - cron: '0 10 * * *'
       timezone: Asia/Kolkata
-    - cron: '5 14 * * *'
+    - cron: '0 14 * * *'
       timezone: Asia/Kolkata
-    - cron: '5 19 * * *'
+    - cron: '0 19 * * *'
       timezone: Asia/Kolkata
-    - cron: '35 * * * *'
+    - cron: '0 5 * * *'
       timezone: Asia/Kolkata
 
 # One shared group for ALL dates and operations. Do not change to a per-run group.
@@ -84,9 +84,9 @@ jobs:
           EVENT_SCHEDULE: ${{ github.event.schedule }}
           OPENAI_API_KEY: ${{ (inputs.operation == 'generate' || github.event.schedule == '5 5 * * *') && secrets.OPENAI_API_KEY || '' }}
           PEXELS_API_KEY: ${{ (inputs.operation == 'generate' || github.event.schedule == '5 5 * * *') && secrets.PEXELS_API_KEY || '' }}
-          YOUTUBE_TOKEN_PICKLE_B64: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.YOUTUBE_TOKEN_PICKLE_B64 || '' }}
-          TELEGRAM_BOT_TOKEN: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_BOT_TOKEN || '' }}
-          TELEGRAM_CHAT_ID: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_CHAT_ID || '' }}
+          YOUTUBE_TOKEN_PICKLE_B64: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '0 5 * * *')) && secrets.YOUTUBE_TOKEN_PICKLE_B64 || '' }}
+          TELEGRAM_BOT_TOKEN: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '0 5 * * *')) && secrets.TELEGRAM_BOT_TOKEN || '' }}
+          TELEGRAM_CHAT_ID: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '0 5 * * *')) && secrets.TELEGRAM_CHAT_ID || '' }}
           YOUTUBE_PRIVACY_STATUS: public
           FFMPEG_BINARY: /usr/bin/ffmpeg
           IMAGEIO_FFMPEG_EXE: /usr/bin/ffmpeg
@@ -97,10 +97,10 @@ jobs:
             // official artifact client. The child inherits them without printing them.
             const schedules = {
               '5 5 * * *': ['generate', ''],
-              '5 10 * * *': ['upload', '10:00'],
-              '5 14 * * *': ['upload', '14:00'],
-              '5 19 * * *': ['upload', '19:00'],
-              '35 * * * *': ['cleanup', ''],
+              '0 10 * * *': ['upload', '10:00'],
+              '0 14 * * *': ['upload', '14:00'],
+              '0 19 * * *': ['upload', '19:00'],
+              '0 5 * * *': ['cleanup', ''],
             };
             const selected = context.eventName === 'schedule'
               ? schedules[process.env.EVENT_SCHEDULE]
