@@ -242,6 +242,36 @@ class Preparation(Production):
             self.queue.update(self.day, lambda saved: {**saved, "batch_telegram": notification})
             return self._result(clock, expected_channel, problems=problems)
 
+    def reconcile_not_uploaded(self, slot, *, expected_channel, now=None):
+        """Explicit operator attestation only; never infer absence from a missing ID."""
+        clock = now or india_now
+        with FileLock(str(self.scratch / "preparation.lock"), timeout=0):
+            self.queue.checkpoint = None
+            self.load()
+            instant = clock()
+            require(instant.utcoffset() is not None, "Reconciliation clock must be timezone-aware")
+            require(self.day in (instant.astimezone(TZ).date(), instant.astimezone(TZ).date() + timedelta(days=1)),
+                    "Reconciliation requires today's or tomorrow's target")
+            require(slot in UPLOAD_TIMES and self._future(slot, clock), "Reconciliation slot must still be future")
+            data = self.queue.read(self.day)
+            require(data.get("preparation", {}).get("channel_id") == expected_channel, "Reconciliation channel mismatch")
+            item = next(v for v in data["videos"] if v["slot"] == slot)
+            youtube = item.get("youtube") or {}
+            require(not youtube.get("video_id") and not youtube.get("success"), "Never reconcile an ID-bearing or confirmed upload for retry")
+            require(item["generation_status"] == "ready" and item["upload_status"] in ("uploading", "uncertain"),
+                    "Reconciliation only releases an unresolved upload of an existing render")
+            # Confirm the original durable render before releasing the protected claim.
+            self.restore_media([slot])
+            history = list(item.get("upload_reconciliation_history", []))
+            history.append({"confirmed_at": instant.isoformat(), "source": "manual_youtube_studio_confirmation",
+                            "confirmation": "not_uploaded", "target_date": str(self.day), "slot": slot,
+                            "channel_id": expected_channel, "previous_upload_status": item["upload_status"],
+                            "previous_youtube": youtube})
+            self.queue.checkpoint = self.checkpoint
+            self.queue._set(self.day, slot, {"upload_status": "pending", "youtube": None,
+                                           "upload_reconciliation_history": history})
+            return {"slot": slot, "target_date": str(self.day), "status": "retryable"}
+
     def recoverable_slots(self, *, expected_channel, now):
         """Inspect a loaded target batch without claiming, generating, or uploading."""
         if not self.state or self.state["queue"].get("batch_status") == "READY":

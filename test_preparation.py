@@ -447,6 +447,67 @@ class PreparationTests(unittest.TestCase):
         self.assertEqual(self.count, 3)
         primary.prepare.assert_called_once()
 
+    def test_exact_oct_three_studio_reconciliation_retries_only_fourteen(self):
+        def uploaded(path, metadata, stamp):
+            if stamp == publication_time(DAY,"14:00"):
+                raise TimeoutError("lost outcome")
+            result = self.uploaded(path,metadata,stamp)
+            result["video_id"] = "wYud-PDHqSk" if stamp == publication_time(DAY,"10:00") else "T-II7Hvqpz0"
+            return result
+        self.upload.side_effect = uploaded
+        self.run_prepare()
+        self.controller.queue._set(DAY,"14:00",{"upload_status":"uploading","youtube":None})
+        self.fresh()
+        self.controller.reconcile_not_uploaded("14:00",expected_channel=CHANNEL,now=lambda:NOW)
+        saved=self.controller.queue.read(DAY)["videos"][1]
+        self.assertEqual(saved["upload_status"],"pending")
+        self.assertEqual(saved["upload_reconciliation_history"][0]["previous_upload_status"],"uploading")
+        self.upload.reset_mock();self.upload.side_effect=self.uploaded
+        generation=Mock(side_effect=AssertionError("Do not regenerate"))
+        self.assertEqual(self.run_prepare(generation,self.fresh())["status"],"READY")
+        self.upload.assert_called_once()
+        self.assertEqual(self.upload.call_args.args[2],publication_time(DAY,"14:00"))
+        generation.assert_not_called()
+        self.assertEqual([v["youtube"]["video_id"] for v in self.controller.queue.read(DAY)["videos"]],
+                         ["wYud-PDHqSk","id-14:00","T-II7Hvqpz0"])
+        for slot in ("10:00","19:00"):
+            with self.assertRaises(ProductionError):
+                self.controller.reconcile_not_uploaded(slot,expected_channel=CHANNEL,now=lambda:NOW)
+
+    def test_reconciliation_blocks_elapsed_slot_and_wrong_channel(self):
+        self.upload.side_effect=TimeoutError("unknown")
+        self.run_prepare()
+        for channel,instant in (("wrong",NOW),(CHANNEL,datetime(2026,10,3,14,tzinfo=TZ))):
+            before=len(self.store.saved)
+            with self.assertRaises(ProductionError):
+                self.controller.reconcile_not_uploaded("14:00",expected_channel=channel,now=lambda:instant)
+            self.assertEqual(len(self.store.saved),before)
+
+    def test_reconciliation_refuses_corrupt_original_render_without_releasing_claim(self):
+        self.upload.side_effect=TimeoutError("unknown")
+        self.run_prepare()
+        record=self.controller.state["queue"]["videos"][1]["generated_files"][0]
+        artifact=next(a for a in self.store.saved if a["id"] == record["artifact_id"])
+        artifact["bytes"]=b"corrupt"
+        self.fresh()
+        before=len(self.store.saved)
+        with self.assertRaises(ProductionError):
+            self.controller.reconcile_not_uploaded("14:00",expected_channel=CHANNEL,now=lambda:NOW)
+        self.assertEqual(len(self.store.saved),before)
+        self.assertEqual(json.loads(self.store.latest(DAY)["bytes"])["queue"]["videos"][1]["upload_status"],"uncertain")
+
+    def test_reconciliation_checkpoint_failure_retains_remote_claim(self):
+        self.upload.side_effect=TimeoutError("unknown")
+        self.run_prepare()
+        with patch.object(self.store,"upload",side_effect=RuntimeError("checkpoint failed")):
+            with self.assertRaises(Exception):
+                self.controller.reconcile_not_uploaded("14:00",expected_channel=CHANNEL,now=lambda:NOW)
+        remote=json.loads(self.store.latest(DAY)["bytes"])["queue"]["videos"][1]
+        self.assertEqual(remote["upload_status"],"uncertain")
+        self.upload.reset_mock()
+        self.run_prepare(controller=self.fresh())
+        self.upload.assert_not_called()
+
     def default_recovery_run(self, current):
         import io
         import run_actions
@@ -598,9 +659,12 @@ class PolicyTests(unittest.TestCase):
     def test_workflow_preparation_only_and_concurrency(self):
         import re
         s=Path('.github/workflows/production.yml').read_text()
-        self.assertEqual(re.findall(r"cron: '([^']+)'",s),["5 5 * * *","5 9 * * *","5 13 * * *","5 17 * * *","5 21 * * *"])
+        self.assertEqual(re.findall(r"cron: '([^']+)'",s),[])
+        self.assertNotIn("  schedule:",s)
         self.assertIn('queue: max',s);self.assertIn('cancel-in-progress: false',s)
         self.assertIn('options: [prepare, cleanup]',s)
+        self.assertIn('confirmed_not_uploaded_slot:',s)
+        self.assertIn("args.push('--confirm-not-uploaded-slot', process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT)",s)
         self.assertNotIn('generation_run:',s);self.assertNotIn("['upload'",s)
         self.assertIn('YOUTUBE_PRIVACY_STATUS: private',s)
 

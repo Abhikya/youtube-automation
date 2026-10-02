@@ -386,10 +386,10 @@ class ProductionTests(unittest.TestCase):
         text = (Path(__file__).parent / '.github/workflows/production.yml').read_text(encoding='utf-8-sig')
         active = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
         self.assertIn('workflow_dispatch:', active)
-        self.assertIn('schedule:', active)
+        self.assertNotIn('  schedule:', active)
         import re
         self.assertEqual(re.findall(r"cron: '([^']+)'", active),
-                         ['5 5 * * *', '5 9 * * *', '5 13 * * *', '5 17 * * *', '5 21 * * *'])
+                         [])
         self.assertNotIn('35 * * * *', active)
         self.assertNotIn('22:00', active)
         self.assertIn('group: mystery-production-state', active)
