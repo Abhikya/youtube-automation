@@ -14,17 +14,6 @@ on:
         description: 'Target publication date YYYY-MM-DD; blank means tomorrow in IST'
         required: false
         type: string
-  schedule:
-    - cron: '5 5 * * *'
-      timezone: Asia/Kolkata
-    - cron: '5 9 * * *'
-      timezone: Asia/Kolkata
-    - cron: '5 13 * * *'
-      timezone: Asia/Kolkata
-    - cron: '5 17 * * *'
-      timezone: Asia/Kolkata
-    - cron: '5 21 * * *'
-      timezone: Asia/Kolkata
 
 concurrency:
   group: mystery-production-state
