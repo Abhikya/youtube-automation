@@ -113,7 +113,7 @@ class DailyQueue:
                 self._write(day, changed)
             return changed
 
-    def generate_batch(self, day=None, generator=None, *, slots=None, resume=False, max_attempts=2, context=None, before_generation=None):
+    def generate_batch(self, day=None, generator=None, *, slots=None, resume=False, max_attempts=2, context=None, before_generation=None, generation_allowed=None):
         day = day or india_now().date()
         generator = generator or generate_only
         slots = list(UPLOAD_TIMES if slots is None else slots)
@@ -143,6 +143,9 @@ class DailyQueue:
                         continue
                     attempts = current.get("generation_attempts", 0)
                     if attempts >= max_attempts:
+                        continue
+                    if generation_allowed is not None and not generation_allowed(slot):
+                        logger.info("%s: target publication time elapsed; preserve slot", slot)
                         continue
                     if before_generation is not None:
                         before_generation()

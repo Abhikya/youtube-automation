@@ -65,6 +65,9 @@ class ProductionTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.store = Store()
         self.controller = Production(self.store, DAY, self.root)
+        clock = patch("run_actions.india_now", return_value=datetime(2026, 9, 14, 10, tzinfo=TZ))
+        clock.start()
+        self.addCleanup(clock.stop)
         self.count = 0
         self.metadata = {'Title': 'Exact title', 'Description': 'Exact description', 'Hashtags': ['#Mystery']}
         self.success = {'success': True, 'status': 'uploaded', 'video_id': 'id123',
@@ -91,6 +94,18 @@ class ProductionTests(unittest.TestCase):
         controller = controller or self.fresh()
         return controller.upload(slot, 100, uploader or Mock(return_value=self.success),
                                  notifier or Mock(return_value={'success': True, 'status': 'sent'}))
+
+    def test_legacy_upload_rejects_historical_queue_on_following_dates(self):
+        self.generated()
+        for offset in (1, 2):
+            uploader = Mock()
+            before = len(self.store.saved)
+            with patch("run_actions.india_now", return_value=datetime(2026,9,14,10,tzinfo=TZ)+timedelta(days=offset)):
+                with self.assertRaisesRegex(ProductionError, "only accepts today"):
+                    self.fresh().upload("19:00", uploader=uploader, catch_up=True)
+            uploader.assert_not_called()
+            self.assertEqual(len(self.store.saved), before)
+            self.assertTrue(all(v["upload_status"] == "pending" for v in self.controller.queue.read(DAY)["videos"]))
 
     def test_nonmonotonic_artifact_ids_do_not_poison_next_slot(self):
         # Actual ordering from run 36843732075: the ready receipt has a lower

@@ -50,7 +50,10 @@ async def send_video_notification(video_data):
                 caption = f"Batch READY: all three private uploads and schedules verified for {prepared['target_date']} IST"
             else:
                 reasons = ", ".join(f"{problem['slot']}: {problem['reason']}" for problem in prepared.get("problems", []))
-                caption = f"Preparation incomplete for {prepared['target_date']} IST. Saved work retained for recovery.\n{reasons}"
+                generation = prepared.get("generation_status", "INCOMPLETE")
+                caption = (f"Preparation incomplete for {prepared['target_date']} IST. "
+                           f"Generation: {generation}. Upload/verification pending. "
+                           f"Saved work retained for recovery.\n{reasons}")
         # Keep captions comfortably below Telegram's limit, including Unicode.
         caption = caption[:450]
         request = HTTPXRequest(
