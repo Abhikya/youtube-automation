@@ -314,7 +314,7 @@ class Production:
             self.poisoned = True
             raise
 
-    def generate(self, generator=None, *, max_attempts=2, passes=2, complete=True, context=None, before_generation=None):
+    def generate(self, generator=None, *, max_attempts=2, passes=2, complete=True, context=None, before_generation=None, generation_allowed=None):
         self.load(required=False)
         if self.state is None:
             # Preserve the existing idea memory across days, without restoring yesterday's queue.
@@ -335,7 +335,7 @@ class Production:
         # Legacy operations retain their two-attempt bound; preparation supplies its bounded policy.
         for _ in range(passes):
             result = self.queue.generate_batch(self.day, generator, resume=True, max_attempts=max_attempts,
-                                              context=context, before_generation=before_generation)
+                                              context=context, before_generation=before_generation, generation_allowed=generation_allowed)
             require(result is not None, 'Daily generation failed to return saved queue state')
             if all(v['generation_status'] == 'ready' for v in result['videos']):
                 break
@@ -349,6 +349,8 @@ class Production:
     def upload(self, slot, generation_run=None, uploader=None, notifier=None, *, catch_up=False):
         require(slot in UPLOAD_TIMES, 'Select exactly one valid upload slot')
         self.load(generation_run)
+        require(self.day == india_now().date(), 'Legacy upload only accepts today in Asia/Kolkata')
+        require(not self.state['queue'].get('preparation'), 'Prepared batches must publish through YouTube publishAt')
         items = self.queue.read(self.day)['videos']
         if catch_up:
             # Each item retains its original slot, claim, outcome and notification.
@@ -369,6 +371,7 @@ class Production:
         return self._upload_ready_slot(slot, uploader, notifier)
 
     def _upload_ready_slot(self, slot, uploader=None, notifier=None):
+        require(self.day == india_now().date(), "Legacy upload only accepts today in Asia/Kolkata")
         item = next(v for v in self.queue.read(self.day)['videos'] if v['slot'] == slot)
         require(item['upload_status'] == 'pending' and not (item.get('youtube') or {}).get('video_id'),
                 f'{SLOT_NAMES[slot]} already attempted ({item["upload_status"]}); no automatic retry')
@@ -470,7 +473,7 @@ def restore_oauth():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=['prepare', 'cleanup'])
-    parser.add_argument('--day', default='', help='Target publication date; must be tomorrow in Asia/Kolkata')
+    parser.add_argument('--day', default='', help='Target publication date; tomorrow or explicit existing current-day recovery in Asia/Kolkata')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
     for name in ('httpx', 'httpcore', 'googleapiclient.discovery_cache'):
@@ -486,29 +489,47 @@ def main():
             day = target_day(started_at, args.day)
             require(YOUTUBE_PRIVACY_STATUS == 'private', 'Production preparation requires private privacy')
             require(os.getenv('YOUTUBE_CHANNEL_ID'), 'Missing expected YouTube channel identity')
-            # READY is a durable no-op; do not require remote credentials to recognize it.
-            controller = Preparation(store, day)
-            controller.load(required=False)
-            if controller.state and controller.state['queue'].get('batch_status') == 'READY':
-                result = controller.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'])
-            else:
-                require(all(os.getenv(k) for k in ('OPENAI_API_KEY', 'PEXELS_API_KEY')),
-                        'Missing generation API secrets')
+            def authenticate():
                 restore_oauth()
                 from engine.uploader.youtube_uploader import preparation_preflight
                 preparation_preflight(os.environ['YOUTUBE_CHANNEL_ID'])
-                result = controller.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'])
+            def before_render():
+                require(all(os.getenv(k) for k in ('OPENAI_API_KEY', 'PEXELS_API_KEY')),
+                        'Missing generation API secrets')
+            recovery_result = None
+            if not args.day:
+                from engine.scheduling.preparation import TZ
+                today = started_at.astimezone(TZ).date()
+                # Inspect only today's existing checkpoint; never scan arbitrary pending history.
+                if store.latest(today) is not None:
+                    recovery = Preparation(store, today)
+                    recovery.load()
+                    if recovery.recoverable_slots(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'], now=india_now()):
+                        recovery_result = recovery.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'],
+                            authenticate=authenticate, before_render=before_render,
+                            allow_current_day=True, started_at=started_at)
+                    else:
+                        recovery_result = {'status': 'SKIPPED', 'target_date': str(today),
+                                           'reason': 'no_safe_future_work'}
+            controller = Preparation(store, day)
+            result = controller.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'],
+                                        authenticate=authenticate, before_render=before_render,
+                                        allow_current_day=bool(args.day), started_at=started_at)
+            if recovery_result is not None:
+                result['current_day_recovery'] = recovery_result
             if result['status'] == 'READY':
                 result['cleanup'] = cleanup_production(store)
-            require(result['status'] == 'READY', 'Preparation incomplete; durable state retained for recovery')
         else:
             result = cleanup_production(store)
+        incomplete = args.operation == 'prepare' and (result['status'] != 'READY' or
+                     result.get('current_day_recovery', {}).get('status') == 'PREPARING')
+        outcome = 'RECOVERABLE' if incomplete else 'SUCCESS'
         message = json.dumps(result, ensure_ascii=False)
         print(message)
         if os.getenv('GITHUB_STEP_SUMMARY'):
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:
-                stream.write(f'Production {args.operation}: SUCCESS\n\n```json\n{message}\n```\n')
-        return 0
+                stream.write(f'Production {args.operation}: {outcome}\n\n```json\n{message}\n```\n')
+        return 1 if incomplete else 0
     except Exception as exc:
         # Never print arbitrary network/auth exception strings (they may contain credentials).
         cause = exc.__cause__ if isinstance(exc, CheckpointError) else exc

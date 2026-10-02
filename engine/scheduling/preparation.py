@@ -1,4 +1,5 @@
 """Tomorrow preparation using existing queue, artifacts and YouTube integration."""
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -8,6 +9,7 @@ from engine.scheduling.daily_queue import india_now
 from run_actions import Production, require
 
 TZ = ZoneInfo("Asia/Kolkata")
+logger = logging.getLogger(__name__)
 MAX_GENERATION_ATTEMPTS = 5  # One per unfinished slot per invocation, five lifetime attempts.
 
 
@@ -16,7 +18,10 @@ def target_day(now, explicit=""):
     tomorrow = now.astimezone(TZ).date() + timedelta(days=1)
     if explicit:
         from datetime import date
-        require(date.fromisoformat(explicit) == tomorrow, "Target must be tomorrow in Asia/Kolkata")
+        requested = date.fromisoformat(explicit)
+        require(requested in (tomorrow - timedelta(days=1), tomorrow),
+                "Target must be tomorrow or an existing current-day batch in Asia/Kolkata")
+        return requested
     return tomorrow
 
 
@@ -54,37 +59,59 @@ def validate_preparation(queue):
         ids = [v["youtube"]["video_id"] for v in queue["videos"]]
         require(len(set(ids)) == 3, "READY contains duplicate YouTube IDs")
         ready = datetime.fromisoformat(queue["ready_at"])
-        require(ready.utcoffset() is not None and ready < datetime.fromisoformat(publication_time(day, UPLOAD_TIMES[0])),
-                "READY receipt must precede first publication")
+        require(ready.utcoffset() is not None and ready < datetime.fromisoformat(publication_time(day, UPLOAD_TIMES[-1])),
+                "READY receipt must precede final publication")
 
 
 class Preparation(Production):
-    def prepare(self, *, expected_channel, generator=None, uploader=None, verifier=None, notifier=None, now=None):
+    def prepare(self, *, expected_channel, generator=None, uploader=None, verifier=None, notifier=None, now=None, authenticate=None, before_render=None, allow_current_day=False, started_at=None):
         clock = now or india_now
+        initial = started_at or clock()
+        require(initial.utcoffset() is not None, "Preparation clock must be timezone-aware")
+        execution_day = initial.astimezone(TZ).date()
         # Cross-run serialization remains the shared Actions group; this also protects local callers.
         with FileLock(str(self.scratch / "preparation.lock"), timeout=0):
             self.queue.checkpoint = None
             self.load(required=False)
+            require(execution_day in (self.day - timedelta(days=1), self.day),
+                    "Past and arbitrary future target batches are blocked")
+            require(execution_day != self.day or (allow_current_day and self.state is not None),
+                    "Current-day recovery requires an explicit day and an existing batch")
+            logger.info("execution_date=%s target_publication_date=%s batch=%s action=restore_target_batch",
+                        execution_day, self.day, self.queue.path(self.day).name)
             if self.state:
                 saved = self.state["queue"]
                 require(saved.get("preparation", {}).get("channel_id") == expected_channel,
                         "Existing target batch is legacy or belongs to another channel; do not overwrite")
                 if saved.get("batch_status") == "READY":
-                    return {"status": "READY", "target_date": str(self.day), "no_op": True}
+                    for item in saved["videos"]:
+                        self._log(item, clock, "skip_verified_ready_batch")
+                    return self._result(clock, expected_channel, no_op=True)
             def admission():
                 instant = clock()
                 require(instant.utcoffset() is not None, "Preparation clock must be timezone-aware")
                 current = instant.astimezone(TZ)
-                require(current.date() == self.day - timedelta(days=1),
-                        "Preparation day ended; preserve target batch and do not schedule stale work")
+                require(current.date() == self.day - timedelta(days=1) or
+                        (current.date() == self.day and self.state is not None and
+                         (allow_current_day or execution_day == self.day - timedelta(days=1))),
+                        "Only tomorrow preparation or explicit existing current-day recovery is allowed")
             admission()
             context = {"preparation": {"channel_id": expected_channel, "started_on": str(self.day - timedelta(days=1))},
                        "batch_status": "PREPARING"}
-            self.generate(generator, max_attempts=MAX_GENERATION_ATTEMPTS, passes=1, complete=False,
-                          context=context, before_generation=admission)
-            # Reload durable media identities: checkpoint writes enrich the remote snapshot.
-            self.queue.checkpoint = None
-            self.load()
+            saved = self.state["queue"] if self.state else None
+            if saved is None or any(v["generation_status"] != "ready" and v["upload_status"] == "pending"
+                                    and v.get("generation_attempts", 0) < MAX_GENERATION_ATTEMPTS
+                                    and self._future(v["slot"], clock) for v in saved["videos"]):
+                def render_admission():
+                    admission()
+                    if before_render is not None:
+                        before_render()
+                self.generate(generator, max_attempts=MAX_GENERATION_ATTEMPTS, passes=1, complete=False,
+                              context=context, before_generation=render_admission,
+                              generation_allowed=lambda slot: self._future(slot, clock))
+                # Reload durable media identities enriched by the artifact checkpoint.
+                self.queue.checkpoint = None
+                self.load()
             self.queue.checkpoint = self.checkpoint
             if uploader is None:
                 from engine.uploader.youtube_uploader import upload_prepared_video
@@ -96,26 +123,64 @@ class Preparation(Production):
                 from engine.approval.telegram_bot import notify_generated_video
                 notifier = notify_generated_video
             problems = []
+            authentication_error = None
+            candidates = [v for v in self.queue.read(self.day)["videos"]
+                          if not verified_item(v, self.day, expected_channel)
+                          and v["generation_status"] == "ready" and self._future(v["slot"], clock)
+                          and ((v.get("youtube") or {}).get("video_id") or v["upload_status"] == "pending")]
+            if candidates and authenticate is not None:
+                try:
+                    authenticate()
+                except Exception as exc:
+                    authentication_error = type(exc).__name__
             for item in self.queue.read(self.day)["videos"]:
                 slot = item["slot"]
                 if verified_item(item, self.day, expected_channel):
+                    self._log(item, clock, "skip_verified")
                     continue
                 admission()
+                if not self._future(slot, clock):
+                    self._log(item, clock, "block_elapsed_publish_at")
+                    problems.append({"slot": slot, "reason": "publish_at_not_future"})
+                    continue
                 if item["generation_status"] != "ready":
+                    self._log(item, clock, "generation_incomplete")
                     problems.append({"slot": slot, "reason": "generation_incomplete"})
                     continue
                 youtube = item.get("youtube") or {}
                 if not youtube.get("video_id"):
                     if item["upload_status"] != "pending":
+                        self._log(item, clock, "block_uncertain_manual_reconciliation")
                         problems.append({"slot": slot, "reason": "uncertain_upload_manual_reconciliation"})
                         continue
+                    if authentication_error:
+                        self._log(item, clock, "resume_upload_authentication_blocked")
+                        problems.append({"slot": slot, "reason": "authentication_failed_upload_pending",
+                                         "error_type": authentication_error})
+                        continue
+                    self._log(item, clock, "restore_and_resume_upload")
                     self.restore_media([slot])
+                    admission()
+                    if not self._future(slot, clock):
+                        problems.append({"slot": slot, "reason": "publish_at_not_future"})
+                        continue
                     self.queue._set(self.day, slot, {"upload_status": "uploading"})
                     try:
                         youtube = uploader(item["video_path"], item["metadata"], publication_time(self.day, slot))
                         require(isinstance(youtube, dict) and youtube.get("success") is True and youtube.get("video_id"),
                                 "Unconfirmed prepared upload")
                     except Exception as exc:
+                        from engine.uploader.youtube_uploader import PublicationExpired, UploadNotStarted
+                        if isinstance(exc, UploadNotStarted):
+                            # Proven pre-insertion failure only; retain its audit receipt.
+                            history = list(item.get("upload_not_started_history", []))
+                            history.append({"at": clock().isoformat(), "error_type": type(exc).__name__})
+                            self.queue._set(self.day, slot, {"upload_status": "pending",
+                                "upload_not_started_history": history,
+                                "youtube": {"success": False, "status": "not_started", "error_type": type(exc).__name__}})
+                            problems.append({"slot": slot, "reason": "publish_at_not_future"
+                                             if isinstance(exc, PublicationExpired) else "upload_not_started_retryable"})
+                            continue
                         self.queue._set(self.day, slot, {"upload_status": "uncertain",
                             "youtube": {"success": False, "status": "uncertain", "error_type": type(exc).__name__}})
                         problems.append({"slot": slot, "reason": "uncertain_upload_manual_reconciliation"})
@@ -123,8 +188,17 @@ class Preparation(Production):
                     # ID is durable BEFORE readback, repairs or Telegram side effects.
                     self.queue._set(self.day, slot, {"upload_status": "uploaded", "youtube": youtube,
                                                    "successful_upload_at": clock().isoformat()})
+                if authentication_error:
+                    self._log(item, clock, "verify_existing_id_authentication_blocked")
+                    problems.append({"slot": slot, "reason": "authentication_failed_verification_pending",
+                                     "error_type": authentication_error})
+                    continue
+                self._log(item, clock, "verify_existing_id")
                 try:
                     admission()
+                    if not self._future(slot, clock):
+                        problems.append({"slot": slot, "reason": "publish_at_not_future"})
+                        continue
                     evidence = verifier(youtube["video_id"], expected_channel, publication_time(self.day, slot))
                     self.queue._set(self.day, slot, {"preparation_verification": evidence})
                 except Exception as exc:
@@ -151,18 +225,62 @@ class Preparation(Production):
                 admission()
                 self.queue.update(self.day, lambda saved: {**saved, "batch_status": "READY", "ready_at": clock().isoformat()})
                 try:
-                    notification = notifier({"batch_notice": True, "metadata": {"Title": "Tomorrow batch READY"},
+                    notification = notifier({"batch_notice": True, "metadata": {"Title": "Target batch READY"},
                         "upload": {"success": True, "privacy_status": "private", "video_url": ""},
                         "preparation": {"target_date": str(self.day), "batch_status": "READY"}})
                 except Exception as exc:
                     notification = {"success": False, "error_type": type(exc).__name__}
                 self.queue.update(self.day, lambda saved: {**saved, "batch_telegram": notification})
-                return {"status": "READY", "target_date": str(self.day), "no_op": False}
+                return self._result(clock, expected_channel)
             try:
                 notification = notifier({"batch_notice": True, "metadata": {"Title": "Preparation recovery"},
                     "upload": {"success": False, "error": "Preparation incomplete; saved work retained"},
-                    "preparation": {"target_date": str(self.day), "batch_status": "PREPARING", "problems": problems}})
+                    "preparation": {"target_date": str(self.day), "batch_status": "PREPARING", "problems": problems,
+                        "generation_status": self._result(clock, expected_channel)["generation_status"]}})
             except Exception as exc:
                 notification = {"success": False, "error_type": type(exc).__name__}
             self.queue.update(self.day, lambda saved: {**saved, "batch_telegram": notification})
-            return {"status": "PREPARING", "target_date": str(self.day), "problems": problems}
+            return self._result(clock, expected_channel, problems=problems)
+
+    def recoverable_slots(self, *, expected_channel, now):
+        """Inspect a loaded target batch without claiming, generating, or uploading."""
+        if not self.state or self.state["queue"].get("batch_status") == "READY":
+            return []
+        data = self.state["queue"]
+        if data.get("preparation", {}).get("channel_id") != expected_channel:
+            return []
+        return [v["slot"] for v in data["videos"]
+                if not verified_item(v, self.day, expected_channel) and self._future(v["slot"], lambda: now)
+                and ((v.get("youtube") or {}).get("video_id") or
+                     (v["upload_status"] == "pending" and
+                      (v["generation_status"] == "ready" or
+                       v.get("generation_attempts", 0) < MAX_GENERATION_ATTEMPTS)))]
+
+    def _future(self, slot, clock):
+        instant = clock()
+        require(instant.utcoffset() is not None, "Preparation clock must be timezone-aware")
+        return datetime.fromisoformat(publication_time(self.day, slot)) > instant
+
+    def _log(self, item, clock, action):
+        # Log the durable outcome, rather than an earlier in-memory slot snapshot.
+        item = next(v for v in self.queue.read(self.day)["videos"] if v["slot"] == item["slot"])
+        logger.info("execution_date=%s target_publication_date=%s batch=%s slot=%s "
+                    "generation_status=%s upload_status=%s youtube_id=%s publish_at=%s action=%s",
+                    clock().astimezone(TZ).date(), self.day, self.queue.path(self.day).name,
+                    item["slot"], item["generation_status"], item["upload_status"],
+                    (item.get("youtube") or {}).get("video_id"), publication_time(self.day, item["slot"]), action)
+
+    def _result(self, clock, channel, *, no_op=False, problems=None):
+        data = self.queue.read(self.day)
+        return {"status": data.get("batch_status", "PREPARING"), "target_date": str(self.day),
+                "execution_date": str(clock().astimezone(TZ).date()), "batch": self.queue.path(self.day).name,
+                "no_op": no_op, "recoverable": data.get("batch_status") != "READY",
+                "generation_status": "COMPLETE" if all(v["generation_status"] == "ready" for v in data["videos"]) else "INCOMPLETE",
+                "upload_status": "COMPLETE" if all(v["upload_status"] == "uploaded" and
+                    (v.get("youtube") or {}).get("success") is True and (v.get("youtube") or {}).get("video_id")
+                    for v in data["videos"]) else "INCOMPLETE",
+                "problems": problems or [],
+                "slots": [{"slot": v["slot"], "generation_status": v["generation_status"],
+                           "upload_status": v["upload_status"], "youtube_video_id": (v.get("youtube") or {}).get("video_id"),
+                           "publish_at": publication_time(self.day, v["slot"]),
+                           "verified": verified_item(v, self.day, channel)} for v in data["videos"]]}

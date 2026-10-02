@@ -65,6 +65,18 @@ class PreparationTests(unittest.TestCase):
         self.controller = Preparation(self.store, DAY, path)
         return self.controller
 
+    def test_logs_show_target_and_durable_upload_status(self):
+        with self.assertLogs("engine.scheduling.preparation", level="INFO") as captured:
+            self.run_prepare()
+        lines = [line for line in captured.output if "action=verify_existing_id" in line]
+        self.assertEqual(len(lines), 3)
+        for line in lines:
+            self.assertIn("execution_date=2026-10-02", line)
+            self.assertIn("target_publication_date=2026-10-03", line)
+            self.assertIn("batch=daily_queue_2026-10-03.json", line)
+            self.assertIn("upload_status=uploaded", line)
+            self.assertIn("youtube_id=id-", line)
+
     def test_new_batch_three_private_scheduled_verified_ready(self):
         result = self.run_prepare()
         self.assertEqual(result["status"], "READY")
@@ -232,13 +244,345 @@ class PreparationTests(unittest.TestCase):
         self.assertEqual(self.run_prepare()["status"],"PREPARING")
         self.assertEqual(self.controller.queue.read(DAY)["batch_status"],"PREPARING")
 
+    def auth_pending(self, generator=None):
+        return self.controller.prepare(expected_channel=CHANNEL, generator=generator or self.generate,
+            uploader=self.upload, verifier=self.verify, notifier=self.notify, now=lambda: NOW,
+            authenticate=Mock(side_effect=RuntimeError("secret must not appear")))
+
+    def test_auth_failure_after_generation_preserves_all_pending_artifacts(self):
+        result = self.auth_pending()
+        self.assertEqual(result["generation_status"], "COMPLETE")
+        self.assertEqual(result["upload_status"], "INCOMPLETE")
+        self.assertTrue(result["recoverable"])
+        self.assertEqual(result["target_date"], str(DAY))
+        self.assertEqual(self.count, 3)
+        self.upload.assert_not_called()
+        self.verify.assert_not_called()
+        for item in self.controller.queue.read(DAY)["videos"]:
+            self.assertEqual(item["upload_status"], "pending")
+            self.assertTrue(Path(item["video_path"]).is_file())
+        self.assertNotIn("secret must not appear", json.dumps(result))
+        notice = self.notify.call_args.args[0]["preparation"]
+        self.assertEqual(notice["generation_status"], "COMPLETE")
+
+    def test_auth_fixed_fresh_runner_reuses_fingerprints_and_never_calls_generation(self):
+        self.auth_pending()
+        before = copy.deepcopy(self.controller.state["queue"]["videos"])
+        render = Mock(side_effect=AssertionError("Must not regenerate"))
+        self.assertEqual(self.run_prepare(render, self.fresh())["status"], "READY")
+        render.assert_not_called()
+        after = self.controller.queue.read(DAY)["videos"]
+        for old, new in zip(before, after):
+            self.assertEqual({k:v for k,v in old["generated_files"][0].items() if k != "path"},
+                             {k:v for k,v in new["generated_files"][0].items() if k != "path"})
+        self.assertEqual([v["generated_at"] for v in before], [v["generated_at"] for v in after])
+        self.assertEqual(self.upload.call_count, 3)
+
+    def test_only_missing_third_render_is_generated(self):
+        gen = Mock(side_effect=[self.generate(), self.generate(), RuntimeError("third missing")])
+        self.auth_pending(gen)
+        missing = Mock(side_effect=self.generate)
+        self.run_prepare(missing, self.fresh())
+        self.assertEqual(missing.call_count, 1)
+        self.assertEqual([v["generation_attempts"] for v in self.controller.queue.read(DAY)["videos"]], [1, 1, 2])
+
+    def test_one_uploaded_two_generated_resume_without_replacing_first(self):
+        def upload(path, metadata, stamp):
+            if stamp != publication_time(DAY, "10:00"):
+                raise youtube.UploadNotStarted("auth unavailable")
+            return self.uploaded(path, metadata, stamp)
+        self.upload.side_effect = upload
+        self.run_prepare()
+        first = copy.deepcopy(self.controller.state["queue"]["videos"][0])
+        self.upload.reset_mock(); self.upload.side_effect = self.uploaded
+        render = Mock(side_effect=AssertionError("Do not regenerate"))
+        self.run_prepare(render, self.fresh())
+        self.assertEqual(self.upload.call_count, 2)
+        restored = copy.deepcopy(self.controller.queue.read(DAY)["videos"][0])
+        first["video_path"] = restored["video_path"]
+        first["generated_files"][0]["path"] = restored["generated_files"][0]["path"]
+        self.assertEqual(restored, first)
+        render.assert_not_called()
+
+    def test_existing_current_day_before_first_publication_resumes_exact_target(self):
+        self.auth_pending()
+        controller = self.fresh()
+        render = Mock(side_effect=AssertionError("Do not regenerate"))
+        result = controller.prepare(expected_channel=CHANNEL, generator=render, uploader=self.upload,
+            verifier=self.verify, notifier=self.notify, now=lambda: datetime(2026,10,3,9,tzinfo=TZ),
+            allow_current_day=True)
+        self.assertEqual(result["status"], "READY")
+        self.assertEqual(result["target_date"], str(DAY))
+        render.assert_not_called()
+        self.assertEqual([c.args[2] for c in self.upload.call_args_list],
+                         [publication_time(DAY,s) for s in ("10:00","14:00","19:00")])
+
+    def test_current_day_elapsed_slot_is_blocked_without_claim_remaining_slots_resume(self):
+        self.auth_pending()
+        controller = self.fresh()
+        result = controller.prepare(expected_channel=CHANNEL, generator=Mock(), uploader=self.upload,
+            verifier=self.verify, notifier=self.notify, now=lambda: datetime(2026,10,3,10,tzinfo=TZ),
+            allow_current_day=True)
+        self.assertEqual(result["status"], "PREPARING")
+        self.assertIn({"slot":"10:00","reason":"publish_at_not_future"}, result["problems"])
+        self.assertEqual(self.upload.call_count, 2)
+        self.assertEqual(controller.queue.read(DAY)["videos"][0]["upload_status"], "pending")
+
+    def test_recovery_after_first_verified_slot_can_be_ready_before_remaining_slots(self):
+        def first_only(path, metadata, stamp):
+            if stamp != publication_time(DAY, "10:00"):
+                raise youtube.UploadNotStarted()
+            return self.uploaded(path, metadata, stamp)
+        self.upload.side_effect = first_only
+        self.run_prepare()
+        self.upload.side_effect = self.uploaded
+        result = self.fresh().prepare(expected_channel=CHANNEL, generator=Mock(), uploader=self.upload,
+            verifier=self.verify, notifier=self.notify, now=lambda: datetime(2026,10,3,11,tzinfo=TZ),
+            allow_current_day=True)
+        self.assertEqual(result["status"], "READY")
+        validate_state(self.controller.state, DAY)
+
+    def test_existing_current_day_requires_explicit_recovery(self):
+        self.auth_pending()
+        with self.assertRaises(ProductionError):
+            self.fresh().prepare(expected_channel=CHANNEL, now=lambda:NOW+timedelta(days=1))
+        self.upload.assert_not_called()
+
+    def test_new_current_day_and_old_batch_are_rejected(self):
+        for now in (NOW+timedelta(days=1), NOW+timedelta(days=2)):
+            with self.assertRaises(ProductionError):
+                self.controller.prepare(expected_channel=CHANNEL, generator=Mock(), now=lambda:now,
+                                        allow_current_day=True)
+        self.assertIsNone(self.store.latest(DAY))
+
+    def test_midnight_crossing_keeps_target_and_reuses_generated_media(self):
+        self.auth_pending()
+        moments = iter([datetime(2026,10,2,23,59,tzinfo=TZ)] * 2)
+        def clock():
+            return next(moments, datetime(2026,10,3,0,1,tzinfo=TZ))
+        render = Mock(side_effect=AssertionError("No regeneration"))
+        result = self.fresh().prepare(expected_channel=CHANNEL, generator=render, uploader=self.upload,
+            verifier=self.verify, notifier=self.notify, now=clock)
+        self.assertEqual(result["status"], "READY")
+        self.assertEqual(result["target_date"], str(DAY))
+        self.assertIsNone(self.store.latest(DAY+timedelta(days=1)))
+        render.assert_not_called()
+
+    def test_current_day_missing_elapsed_render_is_never_generated(self):
+        self.auth_pending(Mock(side_effect=RuntimeError("no renders")))
+        generator = Mock(side_effect=self.generate)
+        result = self.fresh().prepare(expected_channel=CHANNEL, generator=generator, uploader=self.upload,
+            verifier=self.verify, notifier=self.notify, now=lambda:datetime(2026,10,3,14,tzinfo=TZ),
+            allow_current_day=True)
+        self.assertEqual(generator.call_count, 1)
+        self.assertEqual(self.upload.call_count, 1)
+        self.assertEqual(result["slots"][2]["slot"], "19:00")
+
+    def test_default_oct_three_targets_oct_four_and_ignores_historical_media(self):
+        self.auth_pending()
+        old_snapshot = copy.deepcopy(self.store.latest(DAY))
+        tomorrow = target_day(datetime(2026,10,3,9,tzinfo=TZ))
+        self.assertEqual(tomorrow, DAY+timedelta(days=1))
+        next_root = self.root / "next-day"
+        next_root.mkdir()
+        controller = Preparation(self.store, tomorrow, next_root)
+        def generated():
+            path = controller.output / f"unsolved_mysteries_2026100309{self.count:02d}00.mp4"
+            self.count += 1
+            path.write_bytes(b"next day render")
+            return {"video_path":str(path), "metadata":{"Title":"New", "Description":"New", "Hashtags":[]}}
+        uploaded = Mock(side_effect=lambda p,m,t:{"success":True,"video_id":"new-"+t,"status":"uploaded"})
+        verified = lambda vid,ch,t:{"verified":True,"video_id":vid,"channel_id":ch,"privacy_status":"private",
+                                   "processing_status":"succeeded","publish_at":t}
+        result = controller.prepare(expected_channel=CHANNEL, generator=generated, uploader=uploaded,
+            verifier=verified, notifier=self.notify, now=lambda:datetime(2026,10,3,9,tzinfo=TZ))
+        self.assertEqual(result["status"], "READY")
+        self.assertEqual(self.store.latest(DAY), old_snapshot)
+        self.assertTrue(all(c.args[2].startswith("2026-10-04") for c in uploaded.call_args_list))
+
+    def test_restore_corrupt_generated_artifact_blocks_upload_without_regeneration(self):
+        self.auth_pending()
+        media = next(a for a in self.store.saved if a["name"].startswith("mystery-media-"))
+        media["bytes"] = b"corrupt"
+        render = Mock()
+        with self.assertRaises(ProductionError): self.run_prepare(render, self.fresh())
+        render.assert_not_called()
+        self.upload.assert_not_called()
+
+    def test_default_cron_after_midnight_resumes_existing_current_day_before_expiry(self):
+        """A fresh cron must recover safe pending slots as well as prepare tomorrow."""
+        import io
+        import run_actions
+        self.auth_pending()  # Oct 2 renders for Oct 3, no upload claims or IDs.
+        recovery = self.fresh()
+        current = datetime(2026, 10, 3, 9, 5, tzinfo=TZ)
+        tomorrow = DAY + timedelta(days=1)
+        primary = Mock()
+        primary.prepare.return_value = {"status": "READY", "target_date": str(tomorrow), "no_op": True}
+        def factory(store, day):
+            self.assertIs(store, self.store)
+            if day == DAY:
+                return recovery
+            self.assertEqual(day, tomorrow)
+            return primary
+        env = {"GITHUB_ACTIONS": "true", "GITHUB_REF": "refs/heads/main", "PRODUCTION_BRANCH": "main",
+               "GITHUB_EVENT_NAME": "workflow_dispatch", "YOUTUBE_CHANNEL_ID": CHANNEL}
+        with patch.dict(os.environ, env, clear=True), patch("sys.argv", ["run_actions.py", "prepare"]), \
+             patch.object(run_actions, "GitHubArtifacts", return_value=self.store), \
+             patch("engine.scheduling.preparation.Preparation", side_effect=factory), \
+             patch.object(run_actions, "india_now", return_value=current), \
+             patch("engine.scheduling.preparation.india_now", return_value=current), \
+             patch.object(run_actions, "logging"), patch.object(run_actions, "YOUTUBE_PRIVACY_STATUS", "private"), \
+             patch.object(run_actions, "restore_oauth"), patch.object(youtube, "preparation_preflight"), \
+             patch.object(youtube, "upload_prepared_video", self.upload), \
+             patch.object(youtube, "verify_prepared_video", self.verify), \
+             patch("engine.approval.telegram_bot.notify_generated_video", self.notify), \
+             patch("engine.scheduling.daily_queue.generate_only", side_effect=AssertionError("Completed renders must be reused")), \
+             patch.object(run_actions, "cleanup_production", return_value={}), patch("sys.stdout", io.StringIO()):
+            run_actions.main()
+        saved = json.loads(self.store.latest(DAY)["bytes"])["queue"]
+        self.assertEqual(saved["batch_status"], "READY",
+                         "Default cron abandoned the existing current-day batch despite future publication slots")
+        self.assertEqual(self.upload.call_count, 3)
+        self.assertEqual(self.count, 3)
+        primary.prepare.assert_called_once()
+
+    def default_recovery_run(self, current):
+        import io
+        import run_actions
+        primary = Mock()
+        primary.prepare.return_value = {"status":"READY", "target_date":str(DAY+timedelta(days=1))}
+        order = []
+        def factory(store, day):
+            self.assertIs(store, self.store)
+            order.append(day)
+            return self.controller if day == DAY else primary
+        env = {"GITHUB_ACTIONS":"true", "GITHUB_REF":"refs/heads/main", "PRODUCTION_BRANCH":"main",
+               "YOUTUBE_CHANNEL_ID":CHANNEL}
+        output = io.StringIO()
+        with patch.dict(os.environ,env,clear=True), patch("sys.argv",["run_actions.py","prepare"]), \
+             patch.object(run_actions,"GitHubArtifacts",return_value=self.store), \
+             patch("engine.scheduling.preparation.Preparation",side_effect=factory), \
+             patch.object(run_actions,"india_now",return_value=current), \
+             patch("engine.scheduling.preparation.india_now",return_value=current), \
+             patch.object(run_actions,"logging"),patch.object(run_actions,"YOUTUBE_PRIVACY_STATUS","private"), \
+             patch.object(run_actions,"restore_oauth"),patch.object(youtube,"preparation_preflight"), \
+             patch.object(youtube,"upload_prepared_video",self.upload),patch.object(youtube,"verify_prepared_video",self.verify), \
+             patch("engine.approval.telegram_bot.notify_generated_video",self.notify), \
+             patch("engine.scheduling.daily_queue.generate_only",side_effect=AssertionError("Do not regenerate")), \
+             patch.object(run_actions,"cleanup_production",return_value={}),patch("sys.stdout",output):
+            code = run_actions.main()
+        primary.prepare.assert_called_once()
+        return code, json.loads(output.getvalue()), order
+
+    def test_default_recovery_skips_elapsed_slot_and_prepares_tomorrow_after_future_slots(self):
+        self.auth_pending()
+        self.fresh()
+        code, result, order = self.default_recovery_run(datetime(2026,10,3,10,5,tzinfo=TZ))
+        self.assertEqual(order,[DAY,DAY+timedelta(days=1)])
+        self.assertEqual(self.upload.call_count,2)
+        self.assertEqual([c.args[2] for c in self.upload.call_args_list],
+                         [publication_time(DAY,s) for s in ("14:00","19:00")])
+        saved = self.controller.queue.read(DAY)
+        self.assertEqual(saved["videos"][0]["upload_status"],"pending")
+        self.assertEqual(saved["date"],str(DAY))
+        self.assertEqual(self.count,3)
+        self.assertEqual(result["status"],"READY")
+        self.assertEqual(code,1)  # The unresolved elapsed slot remains visible in the recovery summary.
+
+    def test_default_prepares_tomorrow_when_current_day_slots_all_elapsed(self):
+        self.auth_pending()
+        before = copy.deepcopy(self.store.latest(DAY))
+        self.fresh()
+        code,result,order = self.default_recovery_run(datetime(2026,10,3,19,tzinfo=TZ))
+        self.assertEqual(code,0)
+        self.assertEqual(result["current_day_recovery"]["status"],"SKIPPED")
+        self.assertEqual(result["current_day_recovery"]["reason"],"no_safe_future_work")
+        self.assertEqual(self.store.latest(DAY),before)
+        self.upload.assert_not_called()
+
+    def test_default_prepares_tomorrow_when_current_day_has_only_uncertain_work(self):
+        self.upload.side_effect = TimeoutError("unknown insertion outcome")
+        self.run_prepare()
+        before = copy.deepcopy(self.store.latest(DAY))
+        self.fresh(); self.upload.reset_mock()
+        code,result,order = self.default_recovery_run(datetime(2026,10,3,9,5,tzinfo=TZ))
+        self.assertEqual(code,0)
+        self.assertEqual(result["current_day_recovery"]["status"],"SKIPPED")
+        self.assertEqual(self.store.latest(DAY),before)
+        self.upload.assert_not_called()
+
+    def test_expiry_after_authentication_preserves_pending_not_uncertain_and_claim_receipt(self):
+        clock = [datetime(2026,10,3,9,59,59,tzinfo=TZ)]
+        self.auth_pending()
+        self.fresh()
+        service = Mock()
+        def authenticate():
+            clock[0] += timedelta(seconds=2)
+            return service
+        def upload(path, metadata, stamp):
+            if stamp == publication_time(DAY,"10:00"):
+                return youtube.upload_prepared_video(path,metadata,stamp)
+            return self.uploaded(path,metadata,stamp)
+        validator = youtube.validate_future_publish_at
+        with patch.object(youtube,"get_authenticated_service",side_effect=authenticate), \
+             patch.object(youtube,"validate_future_publish_at",side_effect=lambda stamp:validator(stamp,clock[0])), \
+             patch.object(youtube,"MediaFileUpload"):
+            result = self.controller.prepare(expected_channel=CHANNEL, generator=Mock(), uploader=upload,
+                verifier=self.verify, notifier=self.notify, allow_current_day=True, now=lambda:clock[0])
+        service.videos.return_value.insert.assert_not_called()
+        item = self.controller.queue.read(DAY)["videos"][0]
+        self.assertEqual(item["upload_status"],"pending")
+        self.assertEqual(item["youtube"]["status"],"not_started")
+        self.assertEqual(item["upload_not_started_history"][0]["error_type"],"PublicationExpired")
+        self.assertIn({"slot":"10:00","reason":"publish_at_not_future"},result["problems"])
+        self.assertEqual(self.count,3)
+
+    def test_cli_manual_and_blank_cron_resume_same_batch_without_generation_secrets(self):
+        import io
+        import run_actions
+        env = {"GITHUB_ACTIONS":"true", "GITHUB_REF":"refs/heads/main", "PRODUCTION_BRANCH":"main",
+               "YOUTUBE_CHANNEL_ID":CHANNEL, "OPENAI_API_KEY":"fixture", "PEXELS_API_KEY":"fixture"}
+        def factory(store, day):
+            self.assertIs(store, self.store)
+            self.assertEqual(day, DAY)
+            return self.controller
+        output = io.StringIO()
+        with patch.dict(os.environ,env,clear=True), patch.object(run_actions,"GitHubArtifacts",return_value=self.store), \
+             patch("engine.scheduling.preparation.Preparation",side_effect=factory), \
+             patch.object(run_actions,"india_now",return_value=NOW), patch("engine.scheduling.preparation.india_now",return_value=NOW), \
+             patch.object(run_actions,"logging"), patch.object(run_actions,"YOUTUBE_PRIVACY_STATUS","private"), \
+             patch("engine.scheduling.daily_queue.generate_only",side_effect=self.generate) as gen, \
+             patch.object(youtube,"upload_prepared_video",self.upload),patch.object(youtube,"verify_prepared_video",self.verify), \
+             patch("engine.approval.telegram_bot.notify_generated_video",self.notify), \
+             patch.object(run_actions,"restore_oauth",side_effect=RuntimeError("credential must not be printed")) as auth, \
+             patch.object(youtube,"preparation_preflight") as preflight, patch.object(run_actions,"cleanup_production",return_value={}), \
+             patch("sys.stdout",output):
+            with patch("sys.argv",["run_actions.py","prepare","--day",str(DAY)]):
+                self.assertEqual(run_actions.main(),1)
+            self.assertEqual(gen.call_count,3)
+            self.assertEqual(json.loads(output.getvalue())["generation_status"],"COMPLETE")
+            self.upload.assert_not_called()
+            preflight.assert_not_called()
+            self.fresh()
+            os.environ.pop("OPENAI_API_KEY"); os.environ.pop("PEXELS_API_KEY")
+            auth.side_effect = None
+            output.seek(0); output.truncate()
+            with patch("sys.argv",["run_actions.py","prepare"]):
+                self.assertEqual(run_actions.main(),0)
+            self.assertEqual(json.loads(output.getvalue())["status"],"READY")
+            self.assertEqual(gen.call_count,3)
+            self.assertEqual(self.upload.call_count,3)
+            preflight.assert_called_once_with(CHANNEL)
+
 
 class PolicyTests(unittest.TestCase):
     def test_tomorrow_uses_india_date_and_rejects_other_days(self):
         now=datetime(2026,10,2,20,tzinfo=timezone.utc)
         self.assertEqual(target_day(now),date(2026,10,4))
         self.assertEqual(target_day(NOW,"2026-10-03"),DAY)
-        for invalid in ("2026-10-01","2026-10-02","2026-10-04"):
+        self.assertEqual(target_day(NOW,"2026-10-02"),NOW.date())
+        for invalid in ("2026-10-01","2026-10-04"):
             with self.assertRaises(ProductionError):target_day(NOW,invalid)
 
     def test_timezone_conversion_all_slots_month_year_rollover(self):
@@ -266,7 +610,7 @@ class PolicyTests(unittest.TestCase):
         env={"GITHUB_ACTIONS":"true","GITHUB_REF":"refs/heads/main","PRODUCTION_BRANCH":"main",
              "GITHUB_EVENT_NAME":"workflow_dispatch","YOUTUBE_CHANNEL_ID":CHANNEL}
         with patch.dict(os.environ,env,clear=True),patch("sys.argv",["run_actions.py","prepare","--day",str(DAY)]), \
-             patch.object(run_actions,"india_now",return_value=NOW),patch.object(run_actions,"YOUTUBE_PRIVACY_STATUS","private"), \
+             patch.object(run_actions,"logging") ,patch.object(run_actions,"india_now",return_value=NOW),patch.object(run_actions,"YOUTUBE_PRIVACY_STATUS","private"), \
              patch.object(run_actions,"GitHubArtifacts"),patch.object(run_actions,"cleanup_production",return_value={}), \
              patch.object(run_actions,"restore_oauth") as auth,patch("engine.scheduling.preparation.Preparation") as controller:
             controller.return_value.state={"queue":{"batch_status":"READY"}}
@@ -278,9 +622,9 @@ class PolicyTests(unittest.TestCase):
     def test_cli_rejects_past_future_before_authentication(self):
         import run_actions
         env={"GITHUB_ACTIONS":"true","GITHUB_REF":"refs/heads/main","PRODUCTION_BRANCH":"main"}
-        for day in ("2026-10-01","2026-10-02","2026-10-04"):
+        for day in ("2026-10-01","2026-10-04"):
             with patch.dict(os.environ,env,clear=True),patch("sys.argv",["run_actions.py","prepare","--day",day]), \
-                 patch.object(run_actions,"india_now",return_value=NOW),patch.object(run_actions,"GitHubArtifacts"), \
+                 patch.object(run_actions,"logging") ,patch.object(run_actions,"india_now",return_value=NOW),patch.object(run_actions,"GitHubArtifacts"), \
                  patch.object(run_actions,"restore_oauth") as auth:
                 self.assertEqual(run_actions.main(),1)
                 auth.assert_not_called()
@@ -349,6 +693,68 @@ class YouTubePreparationTests(unittest.TestCase):
             with self.assertRaises(ValueError):youtube.preparation_preflight(CHANNEL)
             self.service.channels.return_value.list.return_value.execute.return_value={"items":[{"id":CHANNEL}]}
             youtube.preparation_preflight(CHANNEL)
+
+    def test_preinsert_auth_failure_is_retryable_without_insert_or_resumable_call(self):
+        youtube.get_authenticated_service.side_effect = RuntimeError("credential secret")
+        with patch.object(youtube.os.path, "isfile", return_value=True):
+            with self.assertRaises(youtube.UploadNotStarted):
+                youtube.upload_prepared_video("saved.mp4", {"Title":"t","Description":"d","Hashtags":[]}, self.stamp)
+        self.service.videos.return_value.insert.assert_not_called()
+
+    def test_publication_expiring_during_authentication_blocks_insert(self):
+        """The deadline must still be future when insertion starts, not only before auth."""
+        stamp = datetime.fromisoformat(self.stamp)
+        clock = [stamp - timedelta(seconds=1)]
+        def validate(value):
+            parsed = datetime.fromisoformat(value)
+            if parsed <= clock[0]:
+                raise ValueError("Publication time is no longer future")
+            return parsed
+        def authenticate():
+            clock[0] = stamp + timedelta(seconds=1)
+            return self.service
+        youtube.get_authenticated_service.side_effect = authenticate
+        self.service.videos.return_value.insert.return_value.next_chunk.return_value = (None, {"id":"late-id"})
+        with patch.object(youtube, "validate_future_publish_at", side_effect=validate), \
+             patch.object(youtube.os.path, "isfile", return_value=True), patch.object(youtube, "MediaFileUpload"):
+            with self.assertRaises(youtube.PublicationExpired):
+                youtube.upload_prepared_video("saved.mp4", {"Title":"t","Description":"d","Hashtags":[]}, self.stamp)
+        self.service.videos.return_value.insert.assert_not_called()
+
+    def test_initial_deadline_expiry_is_also_proven_not_started(self):
+        with patch.object(youtube,"validate_future_publish_at",side_effect=ValueError("expired")), \
+             patch.object(youtube.os.path,"isfile",return_value=True):
+            with self.assertRaises(youtube.PublicationExpired):
+                youtube.upload_prepared_video("saved.mp4",{"Title":"t","Description":"d","Hashtags":[]},self.stamp)
+        youtube.get_authenticated_service.assert_not_called()
+        self.service.videos.return_value.insert.assert_not_called()
+
+    def test_initial_and_fresh_validation_both_precede_insert(self):
+        order = []
+        def validate(value):
+            order.append("validate")
+            return datetime.fromisoformat(value)
+        def authenticate():
+            order.append("authenticate")
+            return self.service
+        def insert(**kwargs):
+            order.append("insert")
+            request = Mock()
+            request.next_chunk.return_value = (None,{"id":"id"})
+            return request
+        youtube.get_authenticated_service.side_effect = authenticate
+        self.service.videos.return_value.insert.side_effect = insert
+        with patch.object(youtube,"validate_future_publish_at",side_effect=validate), \
+             patch.object(youtube.os.path,"isfile",return_value=True),patch.object(youtube,"MediaFileUpload"):
+            youtube.upload_prepared_video("saved.mp4",{"Title":"t","Description":"d","Hashtags":[]},self.stamp)
+        self.assertEqual(order,["validate","authenticate","validate","insert"])
+
+    def test_error_after_insert_is_not_classified_as_not_started(self):
+        self.service.videos.return_value.insert.return_value.next_chunk.side_effect = ValueError("unconfirmed transfer")
+        with patch.object(youtube.os.path,"isfile",return_value=True), patch.object(youtube,"MediaFileUpload"):
+            with self.assertRaises(ValueError):
+                youtube.upload_prepared_video("saved.mp4", {"Title":"t","Description":"d","Hashtags":[]}, self.stamp)
+        self.service.videos.return_value.insert.assert_called_once()
 
 
 class PreparationNotificationTests(unittest.IsolatedAsyncioTestCase):

@@ -111,6 +111,14 @@ def get_authenticated_service(*, allow_interactive=False):
     return build("youtube", "v3", credentials=creds)
 
 
+class UploadNotStarted(RuntimeError):
+    """Proven failure before constructing or sending an insert request."""
+
+
+class PublicationExpired(UploadNotStarted):
+    """The intended slot elapsed before any insertion request was made."""
+
+
 def upload_video(video_path, title, description, tags, *, publish_at=None):
     if not os.path.isfile(video_path):
         raise FileNotFoundError(f"Rendered video not found: {video_path}")
@@ -125,12 +133,25 @@ def upload_video(video_path, title, description, tags, *, publish_at=None):
 
     status = {"privacyStatus": YOUTUBE_PRIVACY_STATUS, "selfDeclaredMadeForKids": False}
     if publish_at is not None:
-        validate_future_publish_at(publish_at)
+        try:
+            validate_future_publish_at(publish_at)
+        except ValueError:
+            raise PublicationExpired("Publication time invalid or expired before authentication; slot retained") from None
         status.update(privacyStatus="private", publishAt=publish_at)
-    youtube = get_authenticated_service()
+    try:
+        youtube = get_authenticated_service()
+    except Exception:
+        if publish_at is not None:
+            raise UploadNotStarted("Scheduled upload authentication failed before insertion") from None
+        raise
     logger.info("YouTube resumable upload started (%s privacy)", YOUTUBE_PRIVACY_STATUS)
     media = MediaFileUpload(video_path, mimetype="video/mp4", chunksize=UPLOAD_CHUNK_SIZE, resumable=True)
     try:
+        if publish_at is not None:
+            try:
+                validate_future_publish_at(publish_at)
+            except ValueError:
+                raise PublicationExpired("Publication time expired before insertion; slot retained") from None
         request = youtube.videos().insert(
             part="snippet,status",
             body={
@@ -188,7 +209,7 @@ def validate_future_publish_at(value, now=None):
 
 
 def preparation_preflight(expected_channel):
-    # Scope/channel failures occur before rendering or claiming an upload.
+    # Scope/channel failures occur before claiming an upload; renders remain recoverable.
     with open(YOUTUBE_TOKEN_FILE, "rb") as token:
         creds = pickle.load(token)
     if not creds.has_scopes(SCOPES):

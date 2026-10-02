@@ -7,6 +7,12 @@ GitHub Actions preparation opportunities are **05:05, 09:05, 13:05, 17:05 and
 and restores that target date's durable queue/checkpoints. These are recovery
 opportunities for one batch, not five generations.
 
+Explicit `--day` may also resume an existing current-day preparation batch.
+Only unfinished slots with future publication times are advanced; elapsed slots
+remain protected and blocked. Older dates and new current-day batches are rejected.
+The target stays fixed across midnight. OAuth failures retain completed renders
+and pending uploads for recovery without requiring generation secrets again.
+
 Each preparation run generates only unfinished, retryable slots. Completed renders
 and verified slots are skipped and preserved. Each unfinished slot gets at most one
 generation attempt per invocation and **five lifetime attempts** for that target
@@ -285,3 +291,5 @@ persisted across process restarts; a crash leaves uploading/uncertain for manual
 If a prior failure may have completed remotely, inspect YouTube before requesting another
 manual attempt. This isolated retry does not change production preparation/publication
 times, cleanup safeguards, local scheduler slots, clip cache, music or rendering.
+
+Default preparation first checks the existing current-day batch and recovers safe unfinished future slots before preparing tomorrow. Expired slots and uncertain uploads without IDs are preserved and skipped; when no safe future work remains, tomorrow preparation proceeds. Explicit --day still addresses only the requested batch. Both batch outcomes appear in the result. The uploader rechecks publishAt after authentication immediately before insertion; expiry is a proven not-started outcome, never an uncertain transfer.
