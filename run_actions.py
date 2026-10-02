@@ -42,22 +42,15 @@ def require(condition, message):
 
 
 def generation_policy(day, now, event, explicit_day=False):
-    """Reserve the existing 170-minute job budget before the 08:00 target.
-
-    There is no measured upper runtime bound. This conservative admission window
-    does not guarantee completion; late scheduled completion still fails below.
-    """
+    """Admit scheduled generation before 10:00; explicit dispatch is recovery."""
     require(day == now.date(), 'Only today in Asia/Kolkata is allowed; historical/future generation is blocked')
     require(event in ('schedule', 'workflow_dispatch'), 'Unsupported generation event')
-    target = now.replace(hour=8, minute=0, second=0, microsecond=0)
-    cutoff = target - timedelta(minutes=170)  # 05:10 IST, exclusive.
-    normal_start = now.replace(hour=5, minute=5, second=0, microsecond=0)
     if event == 'schedule':
-        require(normal_start <= now < cutoff,
-                'Scheduled generation window is 05:05 to before 05:10 IST; dispatch generate with an explicit current day')
+        require(now.hour < 10,
+                'Scheduled 10:00 IST generation deadline already reached; dispatch generate with an explicit current day')
         return 'scheduled'
-    if now >= cutoff:
-        require(explicit_day, 'After 05:10 recovery requires an explicit current day')
+    if now.hour >= 10:
+        require(explicit_day, 'After 10:00 recovery requires an explicit current day')
     return 'manual_recovery' if explicit_day else 'manual'
 
 
@@ -488,11 +481,11 @@ def main():
             result = Production(store, day).generate()
             completed_at = india_now()
             require(completed_at.date() == day, 'Batch preserved, but requested generation day has ended')
-            result.update(generation_mode=mode, ready_by_deadline='08:00 IST',
-                          ready_by_deadline_missed=completed_at.hour >= 8)
-            if mode == 'scheduled':
-                require(completed_at.hour < 8,
-                        'Batch preserved, but scheduled 08:00 IST ready-by deadline was missed')
+            result.update(generation_mode=mode, ready_by_deadline='10:00 IST',
+                          ready_by_deadline_missed=completed_at.hour >= 10)
+            if mode != 'manual_recovery':
+                require(completed_at.hour < 10,
+                        'Batch preserved, but 10:00 IST generation completion deadline was missed')
         elif args.operation == 'upload':
             require(all(os.getenv(k) for k in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID')), 'Missing Telegram secrets')
             if os.getenv('GITHUB_EVENT_NAME') == 'workflow_dispatch':

@@ -374,7 +374,7 @@ class ProductionTests(unittest.TestCase):
         self.assertIn('schedule:', active)
         import re
         self.assertEqual(re.findall(r"cron: '([^']+)'", active),
-                         ['5 5 * * *', '0 10 * * *', '0 14 * * *', '0 19 * * *', '0 5 * * *'])
+                         ['5 5 * * *', '5 10 * * *', '5 14 * * *', '5 19 * * *', '0 5 * * *'])
         self.assertNotIn('35 * * * *', active)
         self.assertNotIn('22:00', active)
         self.assertIn('group: mystery-production-state', active)
@@ -524,17 +524,24 @@ class GenerationPolicyTests(unittest.TestCase):
         self.assertEqual(production.call_args.args[1], DAY)
         production.return_value.generate.assert_called_once()
 
-    def test_scheduled_late_completion_fails_but_preserves_batch(self):
-        now = datetime(2026, 9, 14, 5, 9, tzinfo=TZ)
-        result, production = self.run_generation(now, completed=now.replace(hour=8, minute=0))
-        self.assertEqual(result, 1)
-        production.return_value.generate.assert_called_once()
-        self.assertTrue(production.return_value.generate.return_value['ready_by_deadline_missed'])
+    def test_generation_completion_deadline(self):
+        now = datetime(2026, 9, 14, 7, 59, tzinfo=TZ)
+        for completed, expected in [(now.replace(hour=9, minute=59, second=59), 0),
+                                    (now.replace(hour=10, minute=0), 1),
+                                    (now.replace(hour=10, minute=1), 1)]:
+            with self.subTest(completed=completed):
+                result, production = self.run_generation(now, completed=completed)
+                self.assertEqual(result, expected)
+                production.return_value.generate.assert_called_once()
+                saved = production.return_value.generate.return_value
+                self.assertEqual(saved['ready_by_deadline'], '10:00 IST')
+                self.assertEqual(saved['ready_by_deadline_missed'], expected == 1)
 
-    def test_main_scheduled_cutoff_prevents_generation(self):
-        result, production = self.run_generation(datetime(2026, 9, 14, 5, 10, tzinfo=TZ))
-        self.assertEqual(result, 1)
-        production.assert_not_called()
+    def test_main_scheduled_deadline_prevents_generation(self):
+        for hour, minute in [(10, 0), (10, 1), (15, 0)]:
+            result, production = self.run_generation(datetime(2026, 9, 14, hour, minute, tzinfo=TZ))
+            self.assertEqual(result, 1)
+            production.assert_not_called()
 
     def test_main_future_day_never_constructs_production(self):
         result, production = self.run_generation(datetime(2026, 9, 14, 15, tzinfo=TZ),
@@ -543,15 +550,16 @@ class GenerationPolicyTests(unittest.TestCase):
         production.assert_not_called()
 
     def test_normal_and_delayed_scheduled_start(self):
-        for minute, second in [(5, 0), (9, 59)]:
-            self.assertEqual(generation_policy(DAY, datetime(2026, 9, 14, 5, minute, second, tzinfo=TZ),
-                                               'schedule'), 'scheduled')
-        for hour, minute in [(5, 4), (5, 10), (6, 0), (8, 1), (9, 30), (9, 59), (10, 0)]:
-            with self.subTest(hour=hour, minute=minute), self.assertRaisesRegex(ProductionError, 'window'):
-                generation_policy(DAY, datetime(2026, 9, 14, hour, minute, tzinfo=TZ), 'schedule')
+        for hour, minute in [(5, 5), (6, 0), (7, 0), (7, 59), (9, 59)]:
+            with self.subTest(hour=hour, minute=minute):
+                now = datetime(2026, 9, 14, hour, minute, tzinfo=TZ)
+                self.assertEqual(generation_policy(DAY, now, 'schedule'), 'scheduled')
+                result, production = self.run_generation(now)
+                self.assertEqual(result, 0)
+                production.return_value.generate.assert_called_once()
 
     def test_explicit_manual_recovery_and_date_protection(self):
-        for hour, minute in [(5, 10), (6, 0), (15, 0)]:
+        for hour, minute in [(10, 0), (10, 1), (15, 0)]:
             now = datetime(2026, 9, 14, hour, minute, tzinfo=TZ)
             self.assertEqual(generation_policy(DAY, now, 'workflow_dispatch', True), 'manual_recovery')
             with self.assertRaisesRegex(ProductionError, 'explicit current day'):
@@ -559,6 +567,13 @@ class GenerationPolicyTests(unittest.TestCase):
             for wrong in (DAY - timedelta(days=1), DAY + timedelta(days=1)):
                 with self.assertRaisesRegex(ProductionError, 'Only today'):
                     generation_policy(wrong, now, 'workflow_dispatch', True)
+                result, production = self.run_generation(now, str(wrong), 'workflow_dispatch')
+                self.assertEqual(result, 1)
+                production.assert_not_called()
+
+    def test_generation_timeout_leaves_other_operation_limits_unchanged(self):
+        text = (Path(__file__).parent / '.github/workflows/production.yml').read_text()
+        self.assertIn("timeout-minutes: ${{ (inputs.operation == 'generate' || github.event.schedule == '5 5 * * *') && 360 || 170 }}", text)
 
 
 class ArtifactTrustTests(unittest.TestCase):
