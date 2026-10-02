@@ -76,9 +76,12 @@ jobs:
           PYTHONUNBUFFERED: '1'
         with:
           script: |
-            const operation = context.eventName === 'schedule' ? 'prepare' : process.env.INPUT_OPERATION;
-            const args = ['run_actions.py', operation,
-              '--day', process.env.INPUT_DAY || '',
-              '--confirmed-not-uploaded-slot', process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT || ''];
+            const inputs = context.payload.inputs || {};
+            const operation = inputs.operation || 'prepare';
+            const args = ['run_actions.py', operation];
+            if (inputs.day) args.push('--day', inputs.day);
+            if (inputs.confirmed_not_uploaded_slot) {
+              args.push('--confirmed-not-uploaded-slot', inputs.confirmed_not_uploaded_slot);
+            }
             await exec.exec('python', args, {env: {...process.env,
               ARTIFACT_MODULE: `${process.env.RUNNER_TEMP}/artifact-client/node_modules/@actions/artifact`}});

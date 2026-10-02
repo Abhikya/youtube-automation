@@ -723,10 +723,34 @@ class PolicyTests(unittest.TestCase):
         self.assertIn('options: [prepare, cleanup]',s)
         self.assertIn('confirmed_not_uploaded_slot:',s)
         self.assertIn("INPUT_CONFIRMED_NOT_UPLOADED_SLOT: ${{ inputs.confirmed_not_uploaded_slot }}",s)
-        self.assertIn("'--confirmed-not-uploaded-slot', process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT || ''",s)
-        self.assertIn("'--day', process.env.INPUT_DAY || ''",s)
+        self.assertIn("args.push('--confirmed-not-uploaded-slot', inputs.confirmed_not_uploaded_slot)",s)
+        self.assertIn("args.push('--day', inputs.day)",s)
         self.assertNotIn('generation_run:',s);self.assertNotIn("['upload'",s)
         self.assertIn('YOUTUBE_PRIVACY_STATUS: private',s)
+
+    def test_actual_workflow_script_uses_dispatch_event_inputs_and_omits_blank_flags(self):
+        import shutil
+        import subprocess
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node.js required to execute the workflow's actual JavaScript")
+        workflow = Path('.github/workflows/production.yml').read_text()
+        script = workflow.split('          script: |\n',1)[1]
+        script = '\n'.join(line[12:] for line in script.splitlines())
+        for inputs, expected in (
+            ({"operation":"prepare","day":"2026-10-03","confirmed_not_uploaded_slot":"14:00"},
+             ["run_actions.py","prepare","--day","2026-10-03","--confirmed-not-uploaded-slot","14:00"]),
+            ({"operation":"prepare","day":"","confirmed_not_uploaded_slot":""},["run_actions.py","prepare"]),
+            ({"operation":"cleanup"},["run_actions.py","cleanup"]),
+        ):
+            with self.subTest(inputs=inputs):
+                harness = ("const context = {eventName:'workflow_dispatch',payload:{inputs:"+json.dumps(inputs)+"}};\n"
+                    "const exec = {exec:async(command,args)=>process.stdout.write(JSON.stringify({command,args}))};\n"
+                    "process.env.INPUT_DAY='';process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT='';\n"
+                    "process.env.INPUT_OPERATION='wrong-environment-value';\n"
+                    "(async()=>{\n"+script+"\n})().catch(error=>{process.stderr.write(error.message);process.exit(1)});")
+                result = subprocess.run([node,'-e',harness],text=True,capture_output=True,check=True)
+                self.assertEqual(json.loads(result.stdout),{"command":"python","args":expected})
 
     def test_cli_explicit_target_and_ready_noop_without_generation_secrets(self):
         import run_actions
