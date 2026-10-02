@@ -41,6 +41,26 @@ def require(condition, message):
         raise ProductionError(message)
 
 
+def generation_policy(day, now, event, explicit_day=False):
+    """Reserve the existing 170-minute job budget before the 08:00 target.
+
+    There is no measured upper runtime bound. This conservative admission window
+    does not guarantee completion; late scheduled completion still fails below.
+    """
+    require(day == now.date(), 'Only today in Asia/Kolkata is allowed; historical/future generation is blocked')
+    require(event in ('schedule', 'workflow_dispatch'), 'Unsupported generation event')
+    target = now.replace(hour=8, minute=0, second=0, microsecond=0)
+    cutoff = target - timedelta(minutes=170)  # 05:10 IST, exclusive.
+    normal_start = now.replace(hour=5, minute=5, second=0, microsecond=0)
+    if event == 'schedule':
+        require(normal_start <= now < cutoff,
+                'Scheduled generation window is 05:05 to before 05:10 IST; dispatch generate with an explicit current day')
+        return 'scheduled'
+    if now >= cutoff:
+        require(explicit_day, 'After 05:10 recovery requires an explicit current day')
+    return 'manual_recovery' if explicit_day else 'manual'
+
+
 def validate_state(state, day, generation_run=None):
     require(state.get('schema') == 1 and state.get('date') == day.isoformat(),
             'Wrong generation date or unsupported state schema')
@@ -325,9 +345,29 @@ class Production:
         require(len(result['videos']) == 3 and len(self.media) == 3, 'Three usable media artifacts required')
         return {'status': 'ready', 'generation_run_id': self.state['generation_run_id'], 'slots': list(SLOT_NAMES.values())}
 
-    def upload(self, slot, generation_run=None, uploader=None, notifier=None):
+    def upload(self, slot, generation_run=None, uploader=None, notifier=None, *, catch_up=False):
         require(slot in UPLOAD_TIMES, 'Select exactly one valid upload slot')
         self.load(generation_run)
+        items = self.queue.read(self.day)['videos']
+        if catch_up:
+            # Each item retains its original slot, claim, outcome and notification.
+            candidates = [v['slot'] for v in items if v['slot'] <= slot
+                          and v['generation_status'] == 'ready'
+                          and v['upload_status'] == 'pending'
+                          and not (v.get('youtube') or {}).get('success')
+                          and not (v.get('youtube') or {}).get('video_id')]
+            if not candidates:
+                return {'status': 'skipped', 'reason': 'no_ready_pending_item'}
+            results = []
+            for original_slot in candidates:
+                # Stop on an uncertain transfer or checkpoint/notification failure.
+                # Earlier successes are durable and will be skipped on the next run.
+                results.append({'slot': original_slot,
+                                'result': self._upload_ready_slot(original_slot, uploader, notifier)})
+            return {'status': 'uploaded', 'uploads': results}
+        return self._upload_ready_slot(slot, uploader, notifier)
+
+    def _upload_ready_slot(self, slot, uploader=None, notifier=None):
         item = next(v for v in self.queue.read(self.day)['videos'] if v['slot'] == slot)
         require(item['upload_status'] == 'pending' and not (item.get('youtube') or {}).get('video_id'),
                 f'{SLOT_NAMES[slot]} already attempted ({item["upload_status"]}); no automatic retry')
@@ -378,7 +418,7 @@ def cleanup_production(store, root=BASE_DIR, now=None):
             controller = Production(store, day, root)
             controller.load()
             items = controller.queue.read(day)['videos']
-            eligible = [v['slot'] for v in items if _eligible(v, now) and v.get('cleanup', {}).get('status') != 'completed']
+            eligible = [v['slot'] for v in items if day < now.date() and _eligible(v, now) and v.get('cleanup', {}).get('status') != 'completed']
             controller.restore_media(eligible)
             controllers.append(controller)
     if not controllers:
@@ -392,6 +432,8 @@ def cleanup_production(store, root=BASE_DIR, now=None):
     require(result.get('status') == 'completed', 'Local guarded cleanup failed')
     require(all(not c.poisoned for c in controllers), 'Cleanup checkpoint failed; remote media retained')
     for controller in controllers:
+        if controller.day >= now.date():
+            continue
         data = queue.read(controller.day)
         for item in data['videos']:
             if not _eligible(item, now):
@@ -436,22 +478,28 @@ def main():
         require(os.getenv('GITHUB_ACTIONS') == 'true', 'Use the manual production Actions workflow')
         require(os.environ.get('GITHUB_REF') == 'refs/heads/' + os.environ.get('PRODUCTION_BRANCH', ''),
                 'Production operations must run on the default branch')
-        day = date.fromisoformat(args.day) if args.day else india_now().date()
-        require(day == india_now().date(), 'Only today in Asia/Kolkata is allowed; historical uploads are blocked')
+        started_at = india_now()
+        day = date.fromisoformat(args.day) if args.day else started_at.date()
+        require(day == started_at.date(), 'Only today in Asia/Kolkata is allowed; historical uploads are blocked')
         store = GitHubArtifacts()
         if args.operation == 'generate':
             require(all(os.getenv(k) for k in ('OPENAI_API_KEY', 'PEXELS_API_KEY')), 'Missing generation API secrets')
-            if os.getenv('GITHUB_EVENT_NAME') == 'schedule':
-                require(india_now().hour < 8, 'Generation deadline already missed')
+            mode = generation_policy(day, started_at, os.getenv('GITHUB_EVENT_NAME'), bool(args.day))
             result = Production(store, day).generate()
-            if os.getenv('GITHUB_EVENT_NAME') == 'schedule':
-                require(india_now().hour < 8, 'Batch preserved, but 08:00 IST completion deadline was missed')
+            completed_at = india_now()
+            require(completed_at.date() == day, 'Batch preserved, but requested generation day has ended')
+            result.update(generation_mode=mode, ready_by_deadline='08:00 IST',
+                          ready_by_deadline_missed=completed_at.hour >= 8)
+            if mode == 'scheduled':
+                require(completed_at.hour < 8,
+                        'Batch preserved, but scheduled 08:00 IST ready-by deadline was missed')
         elif args.operation == 'upload':
             require(all(os.getenv(k) for k in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID')), 'Missing Telegram secrets')
             if os.getenv('GITHUB_EVENT_NAME') == 'workflow_dispatch':
                 require(args.generation_run is not None, 'Manual upload requires the explicit generation run ID')
             restore_oauth()
-            result = Production(store, day).upload(args.slot, args.generation_run)
+            result = Production(store, day).upload(args.slot, args.generation_run,
+                                                 catch_up=os.getenv('GITHUB_EVENT_NAME') == 'schedule')
         else:
             result = cleanup_production(store)
         message = json.dumps(result, ensure_ascii=False)
