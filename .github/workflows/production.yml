@@ -15,9 +15,10 @@ on:
         required: false
         type: string
       confirmed_not_uploaded_slot:
-        description: "Manual Studio confirmation: no uploaded/private/scheduled video for this slot; requires day"
+        description: 'Slot manually verified as not uploaded; blank means none'
         required: false
         type: string
+        default: ''
 
 concurrency:
   group: mystery-production-state
@@ -76,8 +77,8 @@ jobs:
         with:
           script: |
             const operation = context.eventName === 'schedule' ? 'prepare' : process.env.INPUT_OPERATION;
-            const args = ['run_actions.py', operation];
-            if (process.env.INPUT_DAY) args.push('--day', process.env.INPUT_DAY);
-            if (process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT) args.push('--confirm-not-uploaded-slot', process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT);
+            const args = ['run_actions.py', operation,
+              '--day', process.env.INPUT_DAY || '',
+              '--confirmed-not-uploaded-slot', process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT || ''];
             await exec.exec('python', args, {env: {...process.env,
               ARTIFACT_MODULE: `${process.env.RUNNER_TEMP}/artifact-client/node_modules/@actions/artifact`}});

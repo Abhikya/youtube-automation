@@ -474,6 +474,64 @@ class PreparationTests(unittest.TestCase):
             with self.assertRaises(ProductionError):
                 self.controller.reconcile_not_uploaded(slot,expected_channel=CHANNEL,now=lambda:NOW)
 
+    def test_cli_explicit_fourteen_input_reaches_reconciliation_and_reuses_exact_render(self):
+        import io
+        import run_actions
+        def uploaded(path, metadata, stamp):
+            if stamp == publication_time(DAY,"14:00"):
+                raise TimeoutError("unresolved")
+            result=self.uploaded(path,metadata,stamp)
+            result["video_id"]="wYud-PDHqSk" if stamp == publication_time(DAY,"10:00") else "T-II7Hvqpz0"
+            return result
+        self.upload.side_effect=uploaded
+        self.run_prepare()
+        self.controller.queue._set(DAY,"14:00",{"upload_status":"uploading","youtube":None})
+        self.fresh()
+        self.upload.reset_mock();self.upload.side_effect=self.uploaded
+        before=copy.deepcopy(self.controller.store.latest(DAY))
+        env={"GITHUB_ACTIONS":"true","GITHUB_REF":"refs/heads/main","PRODUCTION_BRANCH":"main",
+             "YOUTUBE_CHANNEL_ID":CHANNEL}
+        def call(flag):
+            with patch.dict(os.environ,env,clear=True), \
+                 patch("sys.argv",["run_actions.py","prepare","--day",str(DAY),"--confirmed-not-uploaded-slot",flag]), \
+                 patch.object(run_actions,"GitHubArtifacts",return_value=self.store), \
+                 patch("engine.scheduling.preparation.Preparation",return_value=self.controller), \
+                 patch.object(run_actions,"india_now",return_value=NOW), \
+                 patch("engine.scheduling.preparation.india_now",return_value=NOW), \
+                 patch.object(run_actions,"logging"),patch.object(run_actions,"YOUTUBE_PRIVACY_STATUS","private"), \
+                 patch.object(run_actions,"restore_oauth"),patch.object(youtube,"preparation_preflight"), \
+                 patch.object(youtube,"upload_prepared_video",self.upload),patch.object(youtube,"verify_prepared_video",self.verify), \
+                 patch("engine.approval.telegram_bot.notify_generated_video",self.notify), \
+                 patch("engine.scheduling.daily_queue.generate_only",side_effect=AssertionError("Do not regenerate")) as gen, \
+                 patch.object(run_actions,"cleanup_production",return_value={}),patch("sys.stdout",io.StringIO()):
+                code=run_actions.main()
+                gen.assert_not_called()
+                return code
+        self.assertEqual(call(""),1)
+        self.upload.assert_not_called()
+        self.assertEqual(self.controller.queue.read(DAY)["videos"][1]["upload_status"],"uploading")
+        self.assertEqual(call("14:00"),0)
+        self.upload.assert_called_once()
+        self.assertEqual(self.upload.call_args.args[2],publication_time(DAY,"14:00"))
+        old=json.loads(before["bytes"])["queue"]["videos"]
+        saved=self.controller.queue.read(DAY)["videos"]
+        self.assertEqual(old[1]["generated_files"][0]["sha256"],saved[1]["generated_files"][0]["sha256"])
+        self.assertEqual(saved[0]["youtube"]["video_id"],"wYud-PDHqSk")
+        self.assertEqual(saved[2]["youtube"]["video_id"],"T-II7Hvqpz0")
+        for index in (0,2):
+            self.assertEqual(old[index]["youtube"],saved[index]["youtube"])
+            self.assertEqual(old[index]["preparation_verification"],saved[index]["preparation_verification"])
+
+    def test_cli_invalid_confirmed_slot_is_rejected_before_any_production_work(self):
+        import io
+        import run_actions
+        with patch("sys.argv",["run_actions.py","prepare","--day",str(DAY),"--confirmed-not-uploaded-slot","22:00"]), \
+             patch.object(run_actions,"GitHubArtifacts") as store,patch("sys.stderr",io.StringIO()):
+            with self.assertRaises(SystemExit) as exc:
+                run_actions.main()
+            self.assertEqual(exc.exception.code,2)
+        store.assert_not_called()
+
     def test_reconciliation_blocks_elapsed_slot_and_wrong_channel(self):
         self.upload.side_effect=TimeoutError("unknown")
         self.run_prepare()
@@ -664,7 +722,9 @@ class PolicyTests(unittest.TestCase):
         self.assertIn('queue: max',s);self.assertIn('cancel-in-progress: false',s)
         self.assertIn('options: [prepare, cleanup]',s)
         self.assertIn('confirmed_not_uploaded_slot:',s)
-        self.assertIn("args.push('--confirm-not-uploaded-slot', process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT)",s)
+        self.assertIn("INPUT_CONFIRMED_NOT_UPLOADED_SLOT: ${{ inputs.confirmed_not_uploaded_slot }}",s)
+        self.assertIn("'--confirmed-not-uploaded-slot', process.env.INPUT_CONFIRMED_NOT_UPLOADED_SLOT || ''",s)
+        self.assertIn("'--day', process.env.INPUT_DAY || ''",s)
         self.assertNotIn('generation_run:',s);self.assertNotIn("['upload'",s)
         self.assertIn('YOUTUBE_PRIVACY_STATUS: private',s)
 

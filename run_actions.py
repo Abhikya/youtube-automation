@@ -474,7 +474,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=['prepare', 'cleanup'])
     parser.add_argument('--day', default='', help='Target publication date; tomorrow or explicit existing current-day recovery in Asia/Kolkata')
-    parser.add_argument("--confirm-not-uploaded-slot", default="", choices=UPLOAD_TIMES,
+    parser.add_argument("--confirmed-not-uploaded-slot", "--confirm-not-uploaded-slot",
+                        dest="confirmed_not_uploaded_slot", default="", choices=["", *UPLOAD_TIMES],
                         help="Explicit Studio confirmation of absence; requires prepare --day")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
@@ -484,7 +485,7 @@ def main():
         require(os.getenv('GITHUB_ACTIONS') == 'true', 'Use the manual production Actions workflow')
         require(os.environ.get('GITHUB_REF') == 'refs/heads/' + os.environ.get('PRODUCTION_BRANCH', ''),
                 'Production operations must run on the default branch')
-        require(not args.confirm_not_uploaded_slot or (args.operation == "prepare" and args.day),
+        require(not args.confirmed_not_uploaded_slot or (args.operation == "prepare" and args.day),
                 "Confirmed-not-uploaded reconciliation requires prepare with an explicit --day")
         started_at = india_now()
         store = GitHubArtifacts()
@@ -517,8 +518,8 @@ def main():
                                            'reason': 'no_safe_future_work'}
             controller = Preparation(store, day)
             reconciliation = None
-            if args.confirm_not_uploaded_slot:
-                reconciliation = controller.reconcile_not_uploaded(args.confirm_not_uploaded_slot,
+            if args.confirmed_not_uploaded_slot:
+                reconciliation = controller.reconcile_not_uploaded(args.confirmed_not_uploaded_slot,
                     expected_channel=os.environ["YOUTUBE_CHANNEL_ID"])
             result = controller.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'],
                                         authenticate=authenticate, before_render=before_render,
