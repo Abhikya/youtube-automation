@@ -77,6 +77,106 @@ class PreparationTests(unittest.TestCase):
             self.assertIn("upload_status=uploaded", line)
             self.assertIn("youtube_id=id-", line)
 
+    def test_stale_after_render_preserves_newer_head_and_does_not_regenerate(self):
+        original=self.controller.checkpoint
+        injected=[False]
+        def checkpoint(day,data):
+            if not injected[0] and data["videos"][0]["generation_status"] == "ready":
+                injected[0]=True
+                root=self.root / "other-writer";root.mkdir()
+                other=Preparation(self.store,DAY,root)
+                other.load();other.queue.checkpoint=other.checkpoint
+                self.controller.memory.parent.mkdir(exist_ok=True)
+                self.controller.memory.write_text(json.dumps({"topics":["local-completed"]}))
+                other.memory.write_text(json.dumps({"topics":["newer"]}))
+                other.queue.update(DAY,lambda saved:{**saved,"newer_marker":"preserve"})
+            return original(day,data)
+        with patch.object(self.controller,"checkpoint",side_effect=checkpoint):
+            result=self.run_prepare()
+        self.assertEqual(result["status"],"READY")
+        self.assertEqual(self.count,3)
+        self.assertEqual(self.upload.call_count,3)
+        self.assertEqual(self.controller.state["queue"]["newer_marker"],"preserve")
+        self.assertEqual(self.controller.state["idea_memory"]["topics"],["newer","local-completed"])
+        self.assertEqual(len([a for a in self.store.saved if a["name"].startswith("mystery-media-")]),3)
+
+    def test_stale_upload_claim_reloads_without_inserting_or_stranding_slot(self):
+        self.auth_pending()
+        original=self.controller.checkpoint
+        injected=[False]
+        def checkpoint(day,data):
+            if not injected[0] and data["videos"][0]["upload_status"] == "uploading":
+                injected[0]=True
+                root=self.root / "other-writer";root.mkdir()
+                other=Preparation(self.store,DAY,root)
+                other.load();other.queue.checkpoint=other.checkpoint
+                other.queue.update(DAY,lambda saved:{**saved,"newer_marker":"claim-conflict"})
+            return original(day,data)
+        with patch.object(self.controller,"checkpoint",side_effect=checkpoint):
+            result=self.run_prepare(Mock(side_effect=AssertionError("No regeneration")))
+        self.assertEqual(result["status"],"READY")
+        self.assertEqual(self.upload.call_count,3)
+        self.assertEqual(self.count,3)
+        self.assertEqual(self.controller.state["queue"]["newer_marker"],"claim-conflict")
+
+    def test_stale_uploaded_id_outcome_is_preserved_without_second_insertion(self):
+        original=self.controller.checkpoint
+        injected=[False]
+        def checkpoint(day,data):
+            if not injected[0] and data["videos"][0]["upload_status"] == "uploaded":
+                injected[0]=True
+                root=self.root / "other-writer";root.mkdir()
+                other=Preparation(self.store,DAY,root)
+                other.load();other.queue.checkpoint=other.checkpoint
+                other.queue.update(DAY,lambda saved:{**saved,"newer_marker":"after-insert"})
+            return original(day,data)
+        with patch.object(self.controller,"checkpoint",side_effect=checkpoint):
+            result=self.run_prepare()
+        self.assertEqual(result["status"],"READY")
+        self.assertEqual(self.upload.call_count,3)
+        self.assertEqual(self.count,3)
+        self.assertEqual(self.controller.state["queue"]["videos"][0]["youtube"]["video_id"],"id-10:00")
+        self.assertEqual(self.controller.state["queue"]["newer_marker"],"after-insert")
+
+    def test_newer_checkpoint_confirmed_id_is_never_reuploaded_on_stale_claim(self):
+        self.auth_pending()
+        original=self.controller.checkpoint
+        injected=[False]
+        def checkpoint(day,data):
+            if not injected[0] and data["videos"][0]["upload_status"] == "uploading":
+                injected[0]=True
+                root=self.root / "other-writer";root.mkdir()
+                other=Preparation(self.store,DAY,root)
+                other.load();other.queue.checkpoint=other.checkpoint
+                other.queue._set(DAY,"10:00",{"upload_status":"uploaded","youtube":
+                    {"success":True,"status":"uploaded","video_id":"newer-confirmed-id","privacy_status":"private"}})
+            return original(day,data)
+        with patch.object(self.controller,"checkpoint",side_effect=checkpoint):
+            result=self.run_prepare()
+        self.assertEqual(result["status"],"READY")
+        self.assertEqual(self.upload.call_count,2)
+        self.assertEqual(self.controller.state["queue"]["videos"][0]["youtube"]["video_id"],"newer-confirmed-id")
+        self.assertEqual(self.count,3)
+
+    def test_newer_uncertain_claim_remains_protected_after_stale_conflict(self):
+        self.auth_pending()
+        original=self.controller.checkpoint
+        injected=[False]
+        def checkpoint(day,data):
+            if not injected[0] and data["videos"][0]["upload_status"] == "uploading":
+                injected[0]=True
+                root=self.root / "other-writer";root.mkdir()
+                other=Preparation(self.store,DAY,root)
+                other.load();other.queue.checkpoint=other.checkpoint
+                other.queue._set(DAY,"10:00",{"upload_status":"uncertain","youtube":None})
+            return original(day,data)
+        with patch.object(self.controller,"checkpoint",side_effect=checkpoint):
+            result=self.run_prepare()
+        self.assertEqual(result["status"],"PREPARING")
+        self.assertEqual(self.upload.call_count,2)
+        self.assertEqual(self.controller.state["queue"]["videos"][0]["upload_status"],"uncertain")
+        self.assertEqual(self.count,3)
+
     def test_new_batch_three_private_scheduled_verified_ready(self):
         result = self.run_prepare()
         self.assertEqual(result["status"], "READY")

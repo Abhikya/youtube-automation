@@ -6,7 +6,10 @@ from zoneinfo import ZoneInfo
 from filelock import FileLock
 from config.settings import UPLOAD_TIMES
 from engine.scheduling.daily_queue import india_now
-from run_actions import Production, require
+from run_actions import Production, StaleStateConflict, require
+from engine.scheduling.daily_queue import CheckpointError
+import copy
+import json
 
 TZ = ZoneInfo("Asia/Kolkata")
 logger = logging.getLogger(__name__)
@@ -64,7 +67,72 @@ def validate_preparation(queue):
 
 
 class Preparation(Production):
-    def prepare(self, *, expected_channel, generator=None, uploader=None, verifier=None, notifier=None, now=None, authenticate=None, before_render=None, allow_current_day=False, started_at=None):
+    def prepare(self, **kwargs):
+        # A rejected stale snapshot never authorizes a side effect. Restart from the head.
+        for attempt in range(3):
+            try:
+                return self._prepare_once(**kwargs)
+            except CheckpointError as exc:
+                conflict = exc.__cause__
+                if not isinstance(conflict, StaleStateConflict) or attempt == 2:
+                    raise
+                with FileLock(str(self.scratch / "preparation.lock"), timeout=0):
+                    self.queue.checkpoint = None
+                    local_memory = json.loads(self.memory.read_text()) if self.memory.exists() else {}
+                    self.media = {}
+                    self.load()
+                    self.poisoned = False
+                    newest = self.queue.read(self.day)
+                    base = conflict.base_state
+                    proposed = conflict.proposed_queue
+                    def comparable(item):
+                        value = copy.deepcopy(item)
+                        value.pop("video_path", None)
+                        for record in value.get("generated_files", []):
+                            record.pop("path", None)
+                        return value
+                    changed = False
+                    for candidate in proposed["videos"]:
+                        saved = next(v for v in newest["videos"] if v["slot"] == candidate["slot"])
+                        old = next((v for v in (base or {}).get("queue", {}).get("videos", [])
+                                    if v["slot"] == candidate["slot"]), None)
+                        vid = (candidate.get("youtube") or {}).get("video_id")
+                        saved_id = (saved.get("youtube") or {}).get("video_id")
+                        require(not vid or not saved_id or vid == saved_id,
+                                "Conflicting confirmed IDs; retain checkpoints for manual reconciliation")
+                        old_id = (old.get("youtube") or {}).get("video_id") if old else None
+                        require(not vid or old_id != vid or saved_id == vid,
+                                "Newer checkpoint removed a confirmed ID; manual reconciliation required")
+                        important = ((candidate["generation_status"] == "ready" and
+                                      (old is None or old["generation_status"] != "ready")) or
+                                     (vid and vid != old_id) or
+                                     (candidate["upload_status"] == "uncertain" and
+                                      (old is None or old["upload_status"] != "uncertain")))
+                        if not important or comparable(candidate) == comparable(saved):
+                            continue
+                        if old is not None and comparable(saved) == comparable(old):
+                            require(self.state["generation_run_id"] == base["generation_run_id"],
+                                    "Checkpoint generation ownership changed")
+                            require(newest.get("preparation") == base["queue"].get("preparation"),
+                                    "Checkpoint preparation ownership changed")
+                            saved.update(copy.deepcopy(candidate))
+                            changed = True
+                        else:
+                            require((not vid or saved_id == vid) and
+                                    (candidate["generation_status"] != "ready" or saved["generation_status"] == "ready") and
+                                    (candidate["upload_status"] != "uncertain" or saved["upload_status"] in ("uploading", "uncertain", "uploaded")),
+                                    "Completed local work conflicts with newer state; manual reconciliation required")
+                    if changed:
+                        memory = self.state["idea_memory"]
+                        for category, ideas in local_memory.items():
+                            memory[category] = list(dict.fromkeys(memory.get(category, []) + ideas))
+                        self.memory.write_text(json.dumps(memory), encoding="utf-8")
+                        self.queue.checkpoint = self.checkpoint
+                        self.queue.update(self.day, lambda _: newest)
+                    logger.warning("Reloaded newer checkpoint for target %s; resuming without overwriting its slots", self.day)
+        raise AssertionError("Unreachable checkpoint retry state")
+
+    def _prepare_once(self, *, expected_channel, generator=None, uploader=None, verifier=None, notifier=None, now=None, authenticate=None, before_render=None, allow_current_day=False, started_at=None):
         clock = now or india_now
         initial = started_at or clock()
         require(initial.utcoffset() is not None, "Preparation clock must be timezone-aware")

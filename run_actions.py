@@ -95,6 +95,14 @@ def validate_state(state, day, generation_run=None):
                                           for v in memory.values()), 'Invalid idea memory')
 
 
+class StaleStateConflict(ProductionError):
+    """A proposed snapshot must be reconciled with the newer authoritative head."""
+    def __init__(self, state, proposed):
+        super().__init__("Stale state detected; concurrent writer or newer checkpoint exists")
+        self.base_state = copy.deepcopy(state)
+        self.proposed_queue = copy.deepcopy(proposed)
+
+
 class GitHubArtifacts:
     """REST reads/deletes; official Actions artifact client for uploads in an action context."""
     def __init__(self):
@@ -171,8 +179,12 @@ class GitHubArtifacts:
         return self.trusted(next(a for a in candidates if a['id'] == head))
 
     def latest(self, day):
-        matches = [a for a in self.artifacts() if a['name'].startswith(f'{STATE_PREFIX}{day}-')]
-        return self.newest_checkpoint(matches)
+        matches = {a['id']: a for a in self.artifacts() if a['name'].startswith(f'{STATE_PREFIX}{day}-')}
+        # Directly confirmed uploads can precede their visibility in the REST listing.
+        for artifact in getattr(self, '_confirmed_checkpoints', {}).values():
+            if artifact['name'].startswith(f'{STATE_PREFIX}{day}-'):
+                matches.setdefault(artifact['id'], artifact)
+        return self.newest_checkpoint(list(matches.values()))
 
     def by_id(self, artifact_id, run_id):
         artifact = self.api_request('GET', f'actions/artifacts/{artifact_id}').json()
@@ -256,7 +268,12 @@ class Production:
                 record = item['generated_files'][0]
                 self.media[item['slot']] = copy.deepcopy(record)
                 item['video_path'] = record['path'] = str(self.output / record['filename'])
-        self.queue.update(self.day, lambda _: queue)
+        checkpoint = self.queue.checkpoint
+        self.queue.checkpoint = None
+        try:
+            self.queue.update(self.day, lambda _: queue)
+        finally:
+            self.queue.checkpoint = checkpoint
         self.memory.parent.mkdir(exist_ok=True)
         self.memory.write_text(json.dumps(state['idea_memory'], ensure_ascii=False), encoding='utf-8')
         return True
@@ -282,8 +299,8 @@ class Production:
         require(not self.poisoned and day == self.day, 'State checkpoint is blocked')
         try:
             current = self.store.latest(day)
-            require((current['id'] if current else None) == self.latest_id,
-                    'Stale state detected; concurrent writer or newer checkpoint exists')
+            if (current['id'] if current else None) != self.latest_id:
+                raise StaleStateConflict(self.state, data)
             snapshot = copy.deepcopy(data)
             for item in snapshot['videos']:
                 if item['generation_status'] != 'ready':
@@ -309,6 +326,9 @@ class Production:
             path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
             name = f'{STATE_PREFIX}{day}-{self.store.run_id}-{uuid.uuid4().hex}'
             artifact = self.store.upload(name, path, STATE_DAYS)
+            confirmed = getattr(self.store, '_confirmed_checkpoints', {})
+            confirmed[artifact['id']] = copy.deepcopy(artifact)
+            self.store._confirmed_checkpoints = confirmed
             self.latest_id, self.state = artifact['id'], state
         except Exception:
             self.poisoned = True

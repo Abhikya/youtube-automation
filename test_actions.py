@@ -257,6 +257,24 @@ class ProductionTests(unittest.TestCase):
         self.assertEqual(len(self.controller.media), 3)
         self.assertEqual(sum(a['name'].startswith('mystery-media-') for a in self.store.saved), 3)
 
+    def test_confirmed_checkpoint_survives_temporarily_older_rest_listing(self):
+        self.generated()
+        latest=self.store.latest(DAY)
+        original=self.store.artifacts
+        with patch.object(self.store,"artifacts",side_effect=lambda:[a for a in original() if a["id"] != latest["id"]]):
+            self.assertEqual(self.store.latest(DAY)["id"],latest["id"])
+            self.controller.queue.checkpoint=self.controller.checkpoint
+            self.controller.queue.update(DAY,lambda saved:{**saved,"confirmed_marker":True})
+        self.assertTrue(self.controller.state["queue"]["confirmed_marker"])
+        self.assertFalse(self.controller.poisoned)
+
+    def test_reloading_state_is_read_only_even_with_checkpoint_callback_attached(self):
+        self.generated()
+        self.controller.queue.checkpoint=self.controller.checkpoint
+        before=len(self.store.saved)
+        self.controller.load()
+        self.assertEqual(len(self.store.saved),before)
+
     def test_stale_checkpoint_refused(self):
         self.generated()
         first, second = self.fresh(), self.fresh()
