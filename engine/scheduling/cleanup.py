@@ -162,7 +162,7 @@ def cleanup_recent(queue, now=None, approved_dir=OUTPUT_VIDEO_DIR):
                         references[str(Path(item["video_path"]).resolve())] += 1
             changed = 0
             for day in snapshots:
-                if day >= now.date():
+                if day >= now.date() or (snapshots[day].get("preparation") and snapshots[day].get("batch_status") != "READY"):
                     continue
                 # Queue lock covers validation, unlink, and state writes; keep upload state intact.
                 try:

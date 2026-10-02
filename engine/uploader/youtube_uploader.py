@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 import errno
 import http.client
 import logging
@@ -21,7 +22,7 @@ from config.settings import (
     YOUTUBE_PRIVACY_STATUS,
 )
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
 MAX_UPLOAD_RETRIES = 5
 logger = logging.getLogger(__name__)
@@ -85,8 +86,9 @@ def get_authenticated_service(*, allow_interactive=False):
         with open(YOUTUBE_TOKEN_FILE, "rb") as token:
             creds = pickle.load(token)
 
-    if not creds or not creds.valid or (allow_interactive and not creds.refresh_token):
-        if creds and creds.expired and creds.refresh_token:
+    scope_upgrade = allow_interactive and creds and not creds.has_scopes(SCOPES)
+    if not creds or not creds.valid or (allow_interactive and not creds.refresh_token) or scope_upgrade:
+        if creds and creds.expired and creds.refresh_token and not scope_upgrade:
             creds.refresh(Request())
         else:
             if not allow_interactive:
@@ -109,7 +111,7 @@ def get_authenticated_service(*, allow_interactive=False):
     return build("youtube", "v3", credentials=creds)
 
 
-def upload_video(video_path, title, description, tags):
+def upload_video(video_path, title, description, tags, *, publish_at=None):
     if not os.path.isfile(video_path):
         raise FileNotFoundError(f"Rendered video not found: {video_path}")
     if not isinstance(title, str) or not title.strip():
@@ -121,6 +123,10 @@ def upload_video(video_path, title, description, tags):
     if YOUTUBE_PRIVACY_STATUS not in {"private", "unlisted", "public"}:
         raise ValueError("YOUTUBE_PRIVACY_STATUS must be private, unlisted, or public.")
 
+    status = {"privacyStatus": YOUTUBE_PRIVACY_STATUS, "selfDeclaredMadeForKids": False}
+    if publish_at is not None:
+        validate_future_publish_at(publish_at)
+        status.update(privacyStatus="private", publishAt=publish_at)
     youtube = get_authenticated_service()
     logger.info("YouTube resumable upload started (%s privacy)", YOUTUBE_PRIVACY_STATUS)
     media = MediaFileUpload(video_path, mimetype="video/mp4", chunksize=UPLOAD_CHUNK_SIZE, resumable=True)
@@ -134,10 +140,7 @@ def upload_video(video_path, title, description, tags):
                     "tags": tags,
                     "categoryId": "22",
                 },
-                "status": {
-                    "privacyStatus": YOUTUBE_PRIVACY_STATUS,
-                    "selfDeclaredMadeForKids": False,
-                },
+                "status": status,
             },
             media_body=media,
         )
@@ -175,6 +178,74 @@ def upload_generated_video(video_path, metadata):
             "error_type": type(exc).__name__,
             "privacy_status": YOUTUBE_PRIVACY_STATUS,
         }
+
+
+def validate_future_publish_at(value, now=None):
+    stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if stamp.utcoffset() is None or stamp <= (now or datetime.now(timezone.utc)):
+        raise ValueError("Publication time must be timezone-aware and strictly future")
+    return stamp
+
+
+def preparation_preflight(expected_channel):
+    # Scope/channel failures occur before rendering or claiming an upload.
+    with open(YOUTUBE_TOKEN_FILE, "rb") as token:
+        creds = pickle.load(token)
+    if not creds.has_scopes(SCOPES):
+        raise RuntimeError("Preparation requires youtube.force-ssl; reauthorize locally and replace the Actions token secret")
+    service = get_authenticated_service()
+    try:
+        channels = service.channels().list(part="id", mine=True).execute().get("items", [])
+        if [c.get("id") for c in channels] != [expected_channel]:
+            raise ValueError("Authenticated YouTube channel does not match configured channel")
+    finally:
+        service.close()
+
+
+def upload_prepared_video(path, metadata, publish_at):
+    response = upload_video(path, metadata["Title"], metadata["Description"], metadata["Hashtags"],
+                            publish_at=publish_at)
+    return {"success": True, "status": "uploaded", "video_id": response["id"],
+            "video_url": "https://www.youtube.com/watch?v=" + response["id"],
+            "privacy_status": "private", "publish_at": publish_at}
+
+
+def verify_prepared_video(video_id, expected_channel, publish_at):
+    validate_future_publish_at(publish_at)
+    service = get_authenticated_service()
+    try:
+        def read():
+            values = service.videos().list(id=video_id, part="snippet,status,processingDetails").execute().get("items", [])
+            if len(values) != 1 or values[0].get("id") != video_id:
+                raise ValueError("Prepared video missing or inaccessible; never reupload blindly")
+            video = values[0]
+            if video.get("snippet", {}).get("channelId") != expected_channel:
+                raise ValueError("Prepared video belongs to another channel")
+            status = video.get("status", {})
+            if status.get("privacyStatus") != "private" or status.get("uploadStatus") in {"failed", "rejected", "deleted"}:
+                raise ValueError("Prepared video is public, unavailable or rejected; repair refused")
+            return video
+        video = read()
+        status = video["status"]
+        actual = status.get("publishAt")
+        matches = actual and datetime.fromisoformat(actual.replace("Z", "+00:00")) == validate_future_publish_at(publish_at)
+        if not matches:
+            # A formerly public private video is rejected by YouTube's publishAt semantics.
+            # Preserve other mutable status fields rather than clearing audience/license settings.
+            mutable = {key: status[key] for key in ("license", "embeddable", "publicStatsViewable",
+                       "selfDeclaredMadeForKids", "containsSyntheticMedia") if key in status}
+            mutable.update(privacyStatus="private", publishAt=publish_at)
+            validate_future_publish_at(publish_at)
+            service.videos().update(part="status", body={"id": video_id, "status": mutable}).execute()
+            video = read()
+            actual = video["status"].get("publishAt")
+        matches = bool(actual and datetime.fromisoformat(actual.replace("Z", "+00:00")) == validate_future_publish_at(publish_at))
+        return {"verified": matches and video.get("processingDetails", {}).get("processingStatus") == "succeeded",
+                "video_id": video_id, "channel_id": expected_channel, "privacy_status": "private",
+                "publish_at": actual, "processing_status": video.get("processingDetails", {}).get("processingStatus"),
+                "checked_at": datetime.now(timezone.utc).isoformat()}
+    finally:
+        service.close()
 
 
 if __name__ == "__main__":

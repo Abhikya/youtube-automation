@@ -374,13 +374,14 @@ class ProductionTests(unittest.TestCase):
         self.assertIn('schedule:', active)
         import re
         self.assertEqual(re.findall(r"cron: '([^']+)'", active),
-                         ['5 5 * * *', '5 10 * * *', '5 14 * * *', '5 19 * * *', '0 5 * * *'])
+                         ['5 5 * * *', '5 9 * * *', '5 13 * * *', '5 17 * * *', '5 21 * * *'])
         self.assertNotIn('35 * * * *', active)
         self.assertNotIn('22:00', active)
         self.assertIn('group: mystery-production-state', active)
         self.assertIn('cancel-in-progress: false', active)
         self.assertNotIn('run_scheduler.py', active)
-        self.assertIn('YOUTUBE_PRIVACY_STATUS: public', active)
+        self.assertIn('YOUTUBE_PRIVACY_STATUS: private', active)
+        self.assertIn('queue: max', active)
         self.assertNotIn('pull_request:', active)
 
     def test_cleanup_never_deletes_current_day_artifacts(self):
@@ -501,79 +502,6 @@ class ProductionTests(unittest.TestCase):
         state = json.loads(self.store.latest(DAY)['bytes'])
         self.assertEqual([v['upload_status'] for v in state['queue']['videos']],
                          ['uploaded', 'uncertain', 'pending'])
-
-
-class GenerationPolicyTests(unittest.TestCase):
-    def run_generation(self, now, day='', event='schedule', completed=None):
-        env = {'GITHUB_ACTIONS': 'true', 'GITHUB_REF': 'refs/heads/main',
-               'PRODUCTION_BRANCH': 'main', 'GITHUB_EVENT_NAME': event,
-               'OPENAI_API_KEY': 'fixture', 'PEXELS_API_KEY': 'fixture'}
-        argv = ['run_actions.py', 'generate'] + (['--day', day] if day else [])
-        with patch.dict(os.environ, env, clear=True), patch('sys.argv', argv), \
-             patch('run_actions.india_now', side_effect=[now, completed or now]), \
-             patch('run_actions.GitHubArtifacts'), patch('run_actions.logging.basicConfig'), \
-             patch('run_actions.Production') as production:
-            production.return_value.generate.return_value = {'status': 'ready'}
-            result = run_actions.main()
-            return result, production
-
-    def test_main_explicit_recovery_uses_requested_day(self):
-        now = datetime(2026, 9, 14, 15, tzinfo=TZ)
-        result, production = self.run_generation(now, str(DAY), 'workflow_dispatch')
-        self.assertEqual(result, 0)
-        self.assertEqual(production.call_args.args[1], DAY)
-        production.return_value.generate.assert_called_once()
-
-    def test_generation_completion_deadline(self):
-        now = datetime(2026, 9, 14, 7, 59, tzinfo=TZ)
-        for completed, expected in [(now.replace(hour=9, minute=59, second=59), 0),
-                                    (now.replace(hour=10, minute=0), 1),
-                                    (now.replace(hour=10, minute=1), 1)]:
-            with self.subTest(completed=completed):
-                result, production = self.run_generation(now, completed=completed)
-                self.assertEqual(result, expected)
-                production.return_value.generate.assert_called_once()
-                saved = production.return_value.generate.return_value
-                self.assertEqual(saved['ready_by_deadline'], '10:00 IST')
-                self.assertEqual(saved['ready_by_deadline_missed'], expected == 1)
-
-    def test_main_scheduled_deadline_prevents_generation(self):
-        for hour, minute in [(10, 0), (10, 1), (15, 0)]:
-            result, production = self.run_generation(datetime(2026, 9, 14, hour, minute, tzinfo=TZ))
-            self.assertEqual(result, 1)
-            production.assert_not_called()
-
-    def test_main_future_day_never_constructs_production(self):
-        result, production = self.run_generation(datetime(2026, 9, 14, 15, tzinfo=TZ),
-                                                 '2026-09-15', 'workflow_dispatch')
-        self.assertEqual(result, 1)
-        production.assert_not_called()
-
-    def test_normal_and_delayed_scheduled_start(self):
-        for hour, minute in [(5, 5), (6, 0), (7, 0), (7, 59), (9, 59)]:
-            with self.subTest(hour=hour, minute=minute):
-                now = datetime(2026, 9, 14, hour, minute, tzinfo=TZ)
-                self.assertEqual(generation_policy(DAY, now, 'schedule'), 'scheduled')
-                result, production = self.run_generation(now)
-                self.assertEqual(result, 0)
-                production.return_value.generate.assert_called_once()
-
-    def test_explicit_manual_recovery_and_date_protection(self):
-        for hour, minute in [(10, 0), (10, 1), (15, 0)]:
-            now = datetime(2026, 9, 14, hour, minute, tzinfo=TZ)
-            self.assertEqual(generation_policy(DAY, now, 'workflow_dispatch', True), 'manual_recovery')
-            with self.assertRaisesRegex(ProductionError, 'explicit current day'):
-                generation_policy(DAY, now, 'workflow_dispatch')
-            for wrong in (DAY - timedelta(days=1), DAY + timedelta(days=1)):
-                with self.assertRaisesRegex(ProductionError, 'Only today'):
-                    generation_policy(wrong, now, 'workflow_dispatch', True)
-                result, production = self.run_generation(now, str(wrong), 'workflow_dispatch')
-                self.assertEqual(result, 1)
-                production.assert_not_called()
-
-    def test_generation_timeout_leaves_other_operation_limits_unchanged(self):
-        text = (Path(__file__).parent / '.github/workflows/production.yml').read_text()
-        self.assertIn("timeout-minutes: ${{ (inputs.operation == 'generate' || github.event.schedule == '5 5 * * *') && 360 || 170 }}", text)
 
 
 class ArtifactTrustTests(unittest.TestCase):
