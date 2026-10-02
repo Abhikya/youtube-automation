@@ -1,4 +1,45 @@
-# Daily mystery Shorts scheduler
+# Mystery Shorts preparation and scheduling
+
+## Current Phase 1 production architecture
+
+GitHub Actions preparation opportunities are **05:05, 09:05, 13:05, 17:05 and
+21:05 IST**, using `Asia/Kolkata`. Each run targets **TOMORROW's production day**
+and restores that target date's durable queue/checkpoints. These are recovery
+opportunities for one batch, not five generations.
+
+Each preparation run generates only unfinished, retryable slots. Completed renders
+and verified slots are skipped and preserved. Each unfinished slot gets at most one
+generation attempt per invocation and **five lifetime attempts** for that target
+batch; repeated or manual preparation runs do not reset the budget.
+
+Generated videos are uploaded to YouTube as **PRIVATE**, setting timezone-aware
+`publishAt` during upload for tomorrow's **10:00, 14:00 and 19:00 IST** slots.
+YouTube performs the actual publication automatically. There are **NO GitHub
+Actions upload jobs at 10:00, 14:00 or 19:00**, and no normal manual Public/Private
+operation or YouTube Studio publication step is required.
+
+A batch becomes **READY** only after all three videos are successfully verified:
+video ID, expected channel ownership, private state, exact intended `publishAt`
+and successful processing. Later preparation runs treat that READY batch as a
+no-op. Known video IDs are verified or safely repaired without duplicate insertion;
+uncertain uploads remain protected and may require exceptional reconciliation.
+
+Cleanup runs after a READY preparation opportunity or explicit cleanup dispatch.
+It operates only on eligible previous-date data and must not delete the current
+or next production batch. Preparation batches must be READY before cleanup.
+The 24-hour age requirement is measured from **successful upload time**, not
+generation completion time. Ownership, fingerprint, safe-path, shared-reference
+and deletion-receipt/checkpoint protections remain in place.
+
+The old production 05:00 cleanup and 10:05/14:05/19:05 upload schedules are removed.
+For OAuth/channel configuration, concurrency and rollout details, see
+[PHASE1_PREPARATION.md](PHASE1_PREPARATION.md).
+
+## Separate local scheduler (not production GitHub Actions)
+
+The following instructions describe the existing optional local scheduler and
+isolated private tests. Their timings and startup behavior do not define the
+current production architecture above.
 
 Run from the project root with YouTube OAuth credentials and Telegram settings configured:
 
@@ -15,7 +56,7 @@ No real generation/upload is required to run the offline tests:
 .\venv\Scripts\python.exe -B -m unittest test_resumable_upload test_integration test_cleanup test_scheduler test_telegram -v
 ```
 
-## Timing and startup
+## Local scheduler timing and startup
 
 Timezone is explicitly `Asia/Kolkata` (tzdata supplies Windows timezone data).
 08:00 generates three videos sequentially, saving each result before continuing.
@@ -28,7 +69,7 @@ Startup recovers only today's occurrence within that window: 08:05 may start the
 A slot not ready at its execution is skipped, not substituted or automatically retried later.
 Generation taking longer than the first upload deadline may therefore miss that slot.
 
-## JSON queue
+## Local scheduler JSON queue
 
 Files are `data/daily_queue_YYYY-MM-DD.json`, dated in India time:
 
@@ -55,7 +96,7 @@ Files are `data/daily_queue_YYYY-MM-DD.json`, dated in India time:
 
 Actual queues contain all three slots from the beginning. Failed generations are recorded as
 `generation_failed` with an error; successful files and their original slots remain intact.
-A batch is attempted once per date. Existing queues are not regenerated on restart, including
+In the separate local scheduler, a batch is attempted once per date. Existing queues are not regenerated on restart, including
 partially completed batches. A crash may leave `pending`/`generating` entries requiring inspection.
 
 Updates use a temporary file in the same directory, flush/fsync, and atomic replacement.
@@ -76,26 +117,28 @@ The API and `run_engine_.py` keep their existing immediate-upload behavior (`pub
 Do not run these commands to test the daily queue; use the offline tests above instead.
 The existing pipeline uses shared temporary audio, so avoid manual generation during the daily batch.
 
-No database, story deduplication, deployment, or asset changes are included.
+The local scheduler does not introduce a database or change story deduplication, deployment or assets.
 
 
 ## Step 5: conservative 24-hour cleanup
 
-Cleanup runs once per hour at minute 35 in Asia/Kolkata, with max_instances=1,
+The separate local scheduler runs cleanup once per hour at minute 35 in Asia/Kolkata, with max_instances=1,
 coalescing, a local process lock, and the existing 15-minute misfire grace.
 There is no startup cleanup replay. It checks eight dates: today and the previous seven.
 Older queue history is not scanned or deleted; unresolved items outside this window
 are retained for manual inspection.
 
 Each successful generation immediately saves its own timezone-aware
-`generation_completed_at`, before computing a file fingerprint. The timer starts at that
-completion time, not batch start or upload time. Existing `generated_at` is retained for
-compatibility but is NOT used to infer eligibility. Old records without the new timestamp
+`generation_completed_at`, before computing a file fingerprint. Cleanup age starts at
+`successful_upload_at`, recorded after a confirmed upload, not generation completion
+or batch start. Existing generation timestamps are retained for history but are NOT
+used to infer cleanup age. Old records without a valid successful-upload timestamp
 or ownership manifest are retained; there is no automatic migration/backdating.
 
 Deletion requires ALL of:
-- `generation_status == "ready"` and a valid timezone-aware completion timestamp;
-- at least 24 hours elapsed;
+- `generation_status == "ready"` and a valid timezone-aware `successful_upload_at`;
+- at least 24 hours elapsed since successful upload;
+- a previous-date queue; preparation batches additionally require batch status READY;
 - `upload_status == "uploaded"`, `youtube.success == true`,
   `youtube.status == "uploaded"`, and a nonempty YouTube video ID;
 - a matching generation-time file manifest owned by this queue date/slot;
@@ -113,11 +156,12 @@ relative/traversal paths, directories, and hard-linked files are rejected.
 The queue is locked during validation/deletion/state update. Queue/history fields are
 retained, with `cleanup.status`, `cleaned_at`, `deleted_files`, `absent_files`, and
 `failed_files` added. A missing eligible file is marked completed/already absent;
-completed items are skipped. Permission failures are recorded and may retry next hour;
+completed items are skipped. Permission failures are recorded and may retry at the
+next eligible cleanup opportunity (next hour for the separate local scheduler);
 one failed file does not stop another item. No remote uploads are retried by cleanup.
 
 Telegram outcome does not affect eligibility. Failed/pending/uploading/uncertain YouTube
-outcomes or missing video IDs retain local files indefinitely. Cleanup is isolated from
+outcomes or missing video IDs are not eligible for guarded cleanup. Cleanup is isolated from
 publishing jobs; a queue-read or filesystem error is logged rather than crashing the scheduler.
 No production cleanup is performed by the offline tests; all fixtures live in temporary directories.
 
@@ -126,7 +170,9 @@ No production cleanup is performed by the offline tests; all fixtures live in te
 
 The full offline regression suite includes queue corruption, missing metadata, uncertain
 uploads, disk-write failures, quota failures, OAuth reuse, and exact upload metadata.
-The normal production times remain 08:00 / 10:00 / 14:00 / 19:00, with cleanup at :35 IST.
+Current production uses the five tomorrow-preparation opportunities documented above;
+YouTube publishes the prepared videos automatically at 10:00 / 14:00 / 19:00 IST.
+The separate local scheduler's 08:00 generation and hourly cleanup are not production Actions jobs.
 
 1. Check local configuration without displaying secrets or contacting APIs:
 
@@ -148,7 +194,7 @@ The normal production times remain 08:00 / 10:00 / 14:00 / 19:00, with cleanup a
    ```
 
    This reuses the existing OAuth implementation, opens the browser only for setup, and
-   saves `token.pickle`. Scheduled uploads reuse that token and refresh it when expired.
+   saves `token.pickle`. Upload/preparation operations reuse that token and refresh it when expired.
    They never open a browser automatically. A revoked/unrefreshable token requires manual
    authorization again. `token.json` is not supported. No video is uploaded by --authorize.
 
@@ -163,12 +209,13 @@ The normal production times remain 08:00 / 10:00 / 14:00 / 19:00, with cleanup a
    generation-only function, queue upload function, and Telegram notifier. Its isolated
    queue is `data/manual_tests/first-private/daily_queue_YYYY-MM-DD.json`, with exactly one
    item using the existing 10:00 slot identifier. This explicit manual invocation uploads
-   immediately; it does not change production times or add a scheduler job.
+   immediately; it is an isolated test, not a production publication or preparation operation.
 
    It saves generation metadata before uploading, claims the upload before the network
    call, saves the YouTube outcome before Telegram, and prints the video path, exact
    metadata, YouTube ID/URL/privacy and Telegram result. Its root generation lock prevents
-   overlap with the scheduled batch. Run this test away from production generation times.
+   overlap with a local scheduled batch sharing that lock. Run this test away from local
+   generation or preparation work that shares temporary media paths.
 
 4. Check the printed MP4 path exists. Open the private video in the intended channel's
    YouTube Studio and compare title, description, and tags against the queue's `metadata`.
@@ -186,9 +233,10 @@ The normal production times remain 08:00 / 10:00 / 14:00 / 19:00, with cleanup a
    request: first inspect YouTube and the existing JSON. No automatic reconciliation exists.
 
 No cleanup is invoked by the private test. Its nested test queues are intentionally outside
-production's daily cleanup scan, so the test MP4/state are retained for inspection.
-Production cleanup remains 24 hours after individual generation completion and requires
-confirmed upload success plus a video ID.
+the production cleanup scan, so the test MP4/state are retained for inspection.
+Production cleanup requires eligible previous-date data, READY for preparation batches,
+at least 24 hours since successful upload, confirmed upload success and a video ID;
+current/next production batches remain protected.
 
 Malformed/incomplete queues are skipped safely. An `uploading` or `uncertain` state is logged
 as manual-review-required and never blindly retried. If a YouTube result cannot be saved,
@@ -203,7 +251,10 @@ Uploads now stream the existing MP4 using MediaFileUpload(resumable=True), 8 MiB
 and next_chunk(num_retries=0). One insert request is created per upload attempt. The same
 request/session is reused across up to five transient retries total (1, 2, 4, 8, 16 seconds).
 The Google client probes an existing session after chunk errors and resumes from the server's
-confirmed offset. OAuth and exact title/description/tags/privacy mapping are unchanged.
+confirmed offset. The isolated private test preserves its exact title/description/tags
+and private-privacy mapping. Current production additionally sets publishAt during
+private upload and requires the documented youtube.force-ssl scope for verification
+and schedule repair.
 
 Retried errors: SSL EOF/zero-return, socket timeout, connection reset/abort/broken pipe,
 remote disconnect/incomplete read, temporary DNS/network errors, and HTTP 408, 429,
@@ -232,4 +283,5 @@ The earlier one-shot upload has no saved resumable session, so this explicit com
 one new resumable attempt. Within that attempt retries reuse its session. Sessions are not
 persisted across process restarts; a crash leaves uploading/uncertain for manual inspection.
 If a prior failure may have completed remotely, inspect YouTube before requesting another
-manual attempt. Cleanup timing, scheduler slots, clip cache, music and rendering are unchanged.
+manual attempt. This isolated retry does not change production preparation/publication
+times, cleanup safeguards, local scheduler slots, clip cache, music or rendering.

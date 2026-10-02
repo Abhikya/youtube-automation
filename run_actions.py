@@ -86,6 +86,10 @@ def validate_state(state, day, generation_run=None):
                     type(record.get('mtime_ns')) is int, 'Invalid fingerprint')
             paths.append(name)
     require(len(paths) == len(set(paths)), 'Shared media reference rejected')
+    if queue.get('preparation') is not None:
+        from engine.scheduling.preparation import validate_preparation
+        validate_preparation(queue)
+        require(state['privacy_status'] == 'private', 'Preparation state must be private')
     memory = state.get('idea_memory')
     require(isinstance(memory, dict) and all(isinstance(v, list) and all(isinstance(x, str) for x in v)
                                           for v in memory.values()), 'Invalid idea memory')
@@ -310,7 +314,7 @@ class Production:
             self.poisoned = True
             raise
 
-    def generate(self, generator=None):
+    def generate(self, generator=None, *, max_attempts=2, passes=2, complete=True, context=None, before_generation=None):
         self.load(required=False)
         if self.state is None:
             # Preserve the existing idea memory across days, without restoring yesterday's queue.
@@ -325,15 +329,19 @@ class Production:
                 self.memory.parent.mkdir(exist_ok=True)
                 self.memory.write_text(json.dumps(previous_state['idea_memory']), encoding='utf-8')
         else:
-            self.restore_media([v['slot'] for v in self.state['queue']['videos'] if v['generation_status'] == 'ready'])
+            self.restore_media([v['slot'] for v in self.state['queue']['videos'] if v['generation_status'] == 'ready'
+                                and (not context or not (v.get('youtube') or {}).get('video_id'))])
         self.queue.checkpoint = self.checkpoint
-        # At most TWO lifetime attempts per slot, including reruns/interrupted attempts.
-        for _ in range(2):
-            result = self.queue.generate_batch(self.day, generator, resume=True, max_attempts=2)
+        # Legacy operations retain their two-attempt bound; preparation supplies its bounded policy.
+        for _ in range(passes):
+            result = self.queue.generate_batch(self.day, generator, resume=True, max_attempts=max_attempts,
+                                              context=context, before_generation=before_generation)
             require(result is not None, 'Daily generation failed to return saved queue state')
             if all(v['generation_status'] == 'ready' for v in result['videos']):
                 break
         bad = [SLOT_NAMES[v['slot']] for v in result['videos'] if v['generation_status'] != 'ready']
+        if not complete:
+            return result
         require(not bad, 'Incomplete three-video batch: ' + ', '.join(bad))
         require(len(result['videos']) == 3 and len(self.media) == 3, 'Three usable media artifacts required')
         return {'status': 'ready', 'generation_run_id': self.state['generation_run_id'], 'slots': list(SLOT_NAMES.values())}
@@ -410,6 +418,8 @@ def cleanup_production(store, root=BASE_DIR, now=None):
         if 0 <= (now.date() - day).days < 8:
             controller = Production(store, day, root)
             controller.load()
+            if controller.state['queue'].get('preparation') and controller.state['queue'].get('batch_status') != 'READY':
+                continue
             items = controller.queue.read(day)['videos']
             eligible = [v['slot'] for v in items if day < now.date() and _eligible(v, now) and v.get('cleanup', {}).get('status') != 'completed']
             controller.restore_media(eligible)
@@ -459,10 +469,8 @@ def restore_oauth():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['generate', 'upload', 'cleanup'])
-    parser.add_argument('--day', default='')
-    parser.add_argument('--slot', choices=UPLOAD_TIMES)
-    parser.add_argument('--generation-run', type=int)
+    parser.add_argument('operation', choices=['prepare', 'cleanup'])
+    parser.add_argument('--day', default='', help='Target publication date; must be tomorrow in Asia/Kolkata')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
     for name in ('httpx', 'httpcore', 'googleapiclient.discovery_cache'):
@@ -472,27 +480,27 @@ def main():
         require(os.environ.get('GITHUB_REF') == 'refs/heads/' + os.environ.get('PRODUCTION_BRANCH', ''),
                 'Production operations must run on the default branch')
         started_at = india_now()
-        day = date.fromisoformat(args.day) if args.day else started_at.date()
-        require(day == started_at.date(), 'Only today in Asia/Kolkata is allowed; historical uploads are blocked')
         store = GitHubArtifacts()
-        if args.operation == 'generate':
-            require(all(os.getenv(k) for k in ('OPENAI_API_KEY', 'PEXELS_API_KEY')), 'Missing generation API secrets')
-            mode = generation_policy(day, started_at, os.getenv('GITHUB_EVENT_NAME'), bool(args.day))
-            result = Production(store, day).generate()
-            completed_at = india_now()
-            require(completed_at.date() == day, 'Batch preserved, but requested generation day has ended')
-            result.update(generation_mode=mode, ready_by_deadline='10:00 IST',
-                          ready_by_deadline_missed=completed_at.hour >= 10)
-            if mode != 'manual_recovery':
-                require(completed_at.hour < 10,
-                        'Batch preserved, but 10:00 IST generation completion deadline was missed')
-        elif args.operation == 'upload':
-            require(all(os.getenv(k) for k in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID')), 'Missing Telegram secrets')
-            if os.getenv('GITHUB_EVENT_NAME') == 'workflow_dispatch':
-                require(args.generation_run is not None, 'Manual upload requires the explicit generation run ID')
-            restore_oauth()
-            result = Production(store, day).upload(args.slot, args.generation_run,
-                                                 catch_up=os.getenv('GITHUB_EVENT_NAME') == 'schedule')
+        if args.operation == 'prepare':
+            from engine.scheduling.preparation import Preparation, target_day
+            day = target_day(started_at, args.day)
+            require(YOUTUBE_PRIVACY_STATUS == 'private', 'Production preparation requires private privacy')
+            require(os.getenv('YOUTUBE_CHANNEL_ID'), 'Missing expected YouTube channel identity')
+            # READY is a durable no-op; do not require remote credentials to recognize it.
+            controller = Preparation(store, day)
+            controller.load(required=False)
+            if controller.state and controller.state['queue'].get('batch_status') == 'READY':
+                result = controller.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'])
+            else:
+                require(all(os.getenv(k) for k in ('OPENAI_API_KEY', 'PEXELS_API_KEY')),
+                        'Missing generation API secrets')
+                restore_oauth()
+                from engine.uploader.youtube_uploader import preparation_preflight
+                preparation_preflight(os.environ['YOUTUBE_CHANNEL_ID'])
+                result = controller.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'])
+            if result['status'] == 'READY':
+                result['cleanup'] = cleanup_production(store)
+            require(result['status'] == 'READY', 'Preparation incomplete; durable state retained for recovery')
         else:
             result = cleanup_production(store)
         message = json.dumps(result, ensure_ascii=False)
@@ -516,4 +524,7 @@ def main():
 
 
 if __name__ == '__main__':
+    # The preparation module shares this module's classes when invoked as a script.
+    import sys
+    sys.modules.setdefault('run_actions', sys.modules[__name__])
     raise SystemExit(main())
