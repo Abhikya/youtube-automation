@@ -147,6 +147,68 @@ class PreparationTests(unittest.TestCase):
         self.assertEqual(self.upload.call_count, 3)
         self.assertEqual(self.count, 3)
 
+    def test_cli_processing_only_is_success_with_ids_preserved_and_no_second_upload(self):
+        import io
+        import run_actions
+        ids={"10:00":"wYud-PDHqSk","14:00":"_11Kh8-88Mk","19:00":"T-II7Hvqpz0"}
+        def upload(path,metadata,stamp):
+            value=self.uploaded(path,metadata,stamp)
+            value["video_id"]=next(vid for slot,vid in ids.items() if publication_time(DAY,slot)==stamp)
+            return value
+        self.upload.side_effect=upload
+        def processing(vid,channel,stamp):
+            value=self.verified(vid,channel,stamp)
+            value.update(verified=False,processing_status="processing")
+            return value
+        self.verify.side_effect=processing
+        first=self.run_prepare()
+        self.assertTrue(first["verification_pending"])
+        self.fresh();self.upload.reset_mock()
+        env={"GITHUB_ACTIONS":"true","GITHUB_REF":"refs/heads/main","PRODUCTION_BRANCH":"main","YOUTUBE_CHANNEL_ID":CHANNEL}
+        def invoke():
+            with patch.dict(os.environ,env,clear=True),patch("sys.argv",["run_actions.py","prepare","--day",str(DAY)]), \
+                 patch.object(run_actions,"GitHubArtifacts",return_value=self.store), \
+                 patch("engine.scheduling.preparation.Preparation",return_value=self.controller), \
+                 patch.object(run_actions,"india_now",return_value=NOW),patch("engine.scheduling.preparation.india_now",return_value=NOW), \
+                 patch.object(run_actions,"logging"),patch.object(run_actions,"YOUTUBE_PRIVACY_STATUS","private"), \
+                 patch.object(run_actions,"restore_oauth"),patch.object(youtube,"preparation_preflight"), \
+                 patch.object(youtube,"upload_prepared_video",self.upload),patch.object(youtube,"verify_prepared_video",self.verify), \
+                 patch("engine.approval.telegram_bot.notify_generated_video",self.notify), \
+                 patch("engine.scheduling.daily_queue.generate_only",side_effect=AssertionError("No generation")), \
+                 patch.object(run_actions,"cleanup_production",return_value={}) as cleanup,patch("sys.stdout",io.StringIO()):
+                code=run_actions.main()
+                if self.controller.state["queue"]["batch_status"] != "READY":
+                    cleanup.assert_not_called()
+                return code
+        self.assertEqual(invoke(),0)
+        for v in self.controller.queue.read(DAY)["videos"]:
+            self.assertEqual(v["upload_status"],"uploaded")
+            self.assertEqual(v["youtube"]["video_id"],ids[v["slot"]])
+            self.assertEqual(v["preparation_verification"]["verification_status"],"pending")
+        for state in ("failed","terminated"):
+            def failed(vid,channel,stamp):
+                value=self.verified(vid,channel,stamp)
+                value.update(verified=False,processing_status=state)
+                return value
+            self.verify.side_effect=failed
+            self.assertEqual(invoke(),1)
+        self.verify.side_effect=self.verified
+        self.assertEqual(invoke(),0)
+        self.assertEqual(self.controller.queue.read(DAY)["batch_status"],"READY")
+        self.upload.assert_not_called()
+        self.assertEqual(self.count,3)
+
+    def test_processing_does_not_hide_wrong_channel_or_elapsed_publish_at(self):
+        self.verify.side_effect=lambda vid,ch,stamp:{"verified":False,"video_id":vid,"channel_id":"wrong",
+            "privacy_status":"private","publish_at":stamp,"processing_status":"processing"}
+        result=self.run_prepare()
+        self.assertFalse(result["verification_pending"])
+        self.fresh()
+        result=self.controller.prepare(expected_channel=CHANNEL,uploader=self.upload,verifier=self.verify,
+            notifier=self.notify,allow_current_day=True,now=lambda:datetime(2026,10,3,19,tzinfo=TZ))
+        self.assertFalse(result["verification_pending"])
+        self.assertTrue(all(p["reason"] == "publish_at_not_future" for p in result["problems"]))
+
     def test_telegram_failure_does_not_revoke_ready(self):
         self.notify.side_effect = TimeoutError("notification")
         self.assertEqual(self.run_prepare()["status"], "READY")

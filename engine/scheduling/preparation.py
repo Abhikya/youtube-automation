@@ -200,6 +200,8 @@ class Preparation(Production):
                         problems.append({"slot": slot, "reason": "publish_at_not_future"})
                         continue
                     evidence = verifier(youtube["video_id"], expected_channel, publication_time(self.day, slot))
+                    if isinstance(evidence, dict) and evidence.get("processing_status") == "processing":
+                        evidence = {**evidence, "verification_status": "pending"}
                     self.queue._set(self.day, slot, {"preparation_verification": evidence})
                 except Exception as exc:
                     if self.poisoned:
@@ -210,7 +212,11 @@ class Preparation(Production):
                     continue
                 current = next(v for v in self.queue.read(self.day)["videos"] if v["slot"] == slot)
                 if not verified_item(current, self.day, expected_channel):
-                    problems.append({"slot": slot, "reason": "processing_or_schedule_unverified"})
+                    evidence = current.get("preparation_verification") or {}
+                    scheduled = {**current, "preparation_verification": {**evidence,
+                                 "verified": True, "processing_status": "succeeded"}}
+                    pending = evidence.get("processing_status") == "processing" and verified_item(scheduled, self.day, expected_channel)
+                    problems.append({"slot": slot, "reason": "processing_pending" if pending else "processing_or_schedule_unverified"})
                     continue
                 try:
                     if not Path(current["video_path"]).is_file():
@@ -309,6 +315,7 @@ class Preparation(Production):
                 "upload_status": "COMPLETE" if all(v["upload_status"] == "uploaded" and
                     (v.get("youtube") or {}).get("success") is True and (v.get("youtube") or {}).get("video_id")
                     for v in data["videos"]) else "INCOMPLETE",
+                "verification_pending": bool(problems) and all(p["reason"] == "processing_pending" for p in problems),
                 "problems": problems or [],
                 "slots": [{"slot": v["slot"], "generation_status": v["generation_status"],
                            "upload_status": v["upload_status"], "youtube_video_id": (v.get("youtube") or {}).get("video_id"),

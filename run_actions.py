@@ -532,9 +532,12 @@ def main():
                 result['cleanup'] = cleanup_production(store)
         else:
             result = cleanup_production(store)
-        incomplete = args.operation == 'prepare' and (result['status'] != 'READY' or
-                     result.get('current_day_recovery', {}).get('status') == 'PREPARING')
-        outcome = 'RECOVERABLE' if incomplete else 'SUCCESS'
+        recovery = result.get('current_day_recovery', {})
+        incomplete = args.operation == 'prepare' and (
+            (result['status'] != 'READY' and not result.get('verification_pending')) or
+            (recovery.get('status') == 'PREPARING' and not recovery.get('verification_pending')))
+        pending = result.get('verification_pending') or recovery.get('verification_pending')
+        outcome = 'RECOVERABLE' if incomplete else ('VERIFICATION_PENDING' if pending else 'SUCCESS')
         message = json.dumps(result, ensure_ascii=False)
         print(message)
         if os.getenv('GITHUB_STEP_SUMMARY'):
