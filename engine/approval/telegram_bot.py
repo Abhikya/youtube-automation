@@ -39,6 +39,21 @@ async def send_video_notification(video_data):
                 f"Error: {upload.get('error', 'Unknown upload error')}"
             )
 
+        if upload["success"] and video_data.get("preparation") and not video_data.get("batch_notice"):
+            prepared = video_data["preparation"]
+            caption = ("Preparation success: generated and uploaded privately; schedule verified\n\n"
+                       f"Title: {title}\nPublication: {prepared['publish_at']}\n"
+                       f"YouTube: {upload['video_url']}")
+        if video_data.get("batch_notice"):
+            prepared = video_data["preparation"]
+            if prepared["batch_status"] == "READY":
+                caption = f"Batch READY: all three private uploads and schedules verified for {prepared['target_date']} IST"
+            else:
+                reasons = ", ".join(f"{problem['slot']}: {problem['reason']}" for problem in prepared.get("problems", []))
+                generation = prepared.get("generation_status", "INCOMPLETE")
+                caption = (f"Preparation incomplete for {prepared['target_date']} IST. "
+                           f"Generation: {generation}. Upload/verification pending. "
+                           f"Saved work retained for recovery.\n{reasons}")
         # Keep captions comfortably below Telegram's limit, including Unicode.
         caption = caption[:450]
         request = HTTPXRequest(
@@ -50,16 +65,19 @@ async def send_video_notification(video_data):
         )
         # A fresh client is initialized and closed within this invocation's loop.
         async with Bot(token=token, request=request) as bot:
-            with open(video_data["video_path"], "rb") as video:
-                message = await bot.send_video(
-                    chat_id=chat_id,
-                    video=video,
-                    caption=caption,
-                    connect_timeout=20,
-                    read_timeout=120,
-                    write_timeout=180,
-                    pool_timeout=20,
-                )
+            if video_data.get("batch_notice"):
+                message = await bot.send_message(chat_id=chat_id, text=caption)
+            else:
+                with open(video_data["video_path"], "rb") as video:
+                    message = await bot.send_video(
+                        chat_id=chat_id,
+                        video=video,
+                        caption=caption,
+                        connect_timeout=20,
+                        read_timeout=120,
+                        write_timeout=180,
+                        pool_timeout=20,
+                    )
         return {"success": True, "status": "sent", "message_id": message.message_id}
     except Exception as exc:
         error = str(exc)

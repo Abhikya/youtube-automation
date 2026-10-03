@@ -41,6 +41,19 @@ def require(condition, message):
         raise ProductionError(message)
 
 
+def generation_policy(day, now, event, explicit_day=False):
+    """Admit scheduled generation before 10:00; explicit dispatch is recovery."""
+    require(day == now.date(), 'Only today in Asia/Kolkata is allowed; historical/future generation is blocked')
+    require(event in ('schedule', 'workflow_dispatch'), 'Unsupported generation event')
+    if event == 'schedule':
+        require(now.hour < 10,
+                'Scheduled 10:00 IST generation deadline already reached; dispatch generate with an explicit current day')
+        return 'scheduled'
+    if now.hour >= 10:
+        require(explicit_day, 'After 10:00 recovery requires an explicit current day')
+    return 'manual_recovery' if explicit_day else 'manual'
+
+
 def validate_state(state, day, generation_run=None):
     require(state.get('schema') == 1 and state.get('date') == day.isoformat(),
             'Wrong generation date or unsupported state schema')
@@ -73,9 +86,21 @@ def validate_state(state, day, generation_run=None):
                     type(record.get('mtime_ns')) is int, 'Invalid fingerprint')
             paths.append(name)
     require(len(paths) == len(set(paths)), 'Shared media reference rejected')
+    if queue.get('preparation') is not None:
+        from engine.scheduling.preparation import validate_preparation
+        validate_preparation(queue)
+        require(state['privacy_status'] == 'private', 'Preparation state must be private')
     memory = state.get('idea_memory')
     require(isinstance(memory, dict) and all(isinstance(v, list) and all(isinstance(x, str) for x in v)
                                           for v in memory.values()), 'Invalid idea memory')
+
+
+class StaleStateConflict(ProductionError):
+    """A proposed snapshot must be reconciled with the newer authoritative head."""
+    def __init__(self, state, proposed):
+        super().__init__("Stale state detected; concurrent writer or newer checkpoint exists")
+        self.base_state = copy.deepcopy(state)
+        self.proposed_queue = copy.deepcopy(proposed)
 
 
 class GitHubArtifacts:
@@ -154,8 +179,12 @@ class GitHubArtifacts:
         return self.trusted(next(a for a in candidates if a['id'] == head))
 
     def latest(self, day):
-        matches = [a for a in self.artifacts() if a['name'].startswith(f'{STATE_PREFIX}{day}-')]
-        return self.newest_checkpoint(matches)
+        matches = {a['id']: a for a in self.artifacts() if a['name'].startswith(f'{STATE_PREFIX}{day}-')}
+        # Directly confirmed uploads can precede their visibility in the REST listing.
+        for artifact in getattr(self, '_confirmed_checkpoints', {}).values():
+            if artifact['name'].startswith(f'{STATE_PREFIX}{day}-'):
+                matches.setdefault(artifact['id'], artifact)
+        return self.newest_checkpoint(list(matches.values()))
 
     def by_id(self, artifact_id, run_id):
         artifact = self.api_request('GET', f'actions/artifacts/{artifact_id}').json()
@@ -239,7 +268,12 @@ class Production:
                 record = item['generated_files'][0]
                 self.media[item['slot']] = copy.deepcopy(record)
                 item['video_path'] = record['path'] = str(self.output / record['filename'])
-        self.queue.update(self.day, lambda _: queue)
+        checkpoint = self.queue.checkpoint
+        self.queue.checkpoint = None
+        try:
+            self.queue.update(self.day, lambda _: queue)
+        finally:
+            self.queue.checkpoint = checkpoint
         self.memory.parent.mkdir(exist_ok=True)
         self.memory.write_text(json.dumps(state['idea_memory'], ensure_ascii=False), encoding='utf-8')
         return True
@@ -265,8 +299,8 @@ class Production:
         require(not self.poisoned and day == self.day, 'State checkpoint is blocked')
         try:
             current = self.store.latest(day)
-            require((current['id'] if current else None) == self.latest_id,
-                    'Stale state detected; concurrent writer or newer checkpoint exists')
+            if (current['id'] if current else None) != self.latest_id:
+                raise StaleStateConflict(self.state, data)
             snapshot = copy.deepcopy(data)
             for item in snapshot['videos']:
                 if item['generation_status'] != 'ready':
@@ -292,12 +326,15 @@ class Production:
             path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
             name = f'{STATE_PREFIX}{day}-{self.store.run_id}-{uuid.uuid4().hex}'
             artifact = self.store.upload(name, path, STATE_DAYS)
+            confirmed = getattr(self.store, '_confirmed_checkpoints', {})
+            confirmed[artifact['id']] = copy.deepcopy(artifact)
+            self.store._confirmed_checkpoints = confirmed
             self.latest_id, self.state = artifact['id'], state
         except Exception:
             self.poisoned = True
             raise
 
-    def generate(self, generator=None):
+    def generate(self, generator=None, *, max_attempts=2, passes=2, complete=True, context=None, before_generation=None, generation_allowed=None):
         self.load(required=False)
         if self.state is None:
             # Preserve the existing idea memory across days, without restoring yesterday's queue.
@@ -312,22 +349,49 @@ class Production:
                 self.memory.parent.mkdir(exist_ok=True)
                 self.memory.write_text(json.dumps(previous_state['idea_memory']), encoding='utf-8')
         else:
-            self.restore_media([v['slot'] for v in self.state['queue']['videos'] if v['generation_status'] == 'ready'])
+            self.restore_media([v['slot'] for v in self.state['queue']['videos'] if v['generation_status'] == 'ready'
+                                and (not context or not (v.get('youtube') or {}).get('video_id'))])
         self.queue.checkpoint = self.checkpoint
-        # At most TWO lifetime attempts per slot, including reruns/interrupted attempts.
-        for _ in range(2):
-            result = self.queue.generate_batch(self.day, generator, resume=True, max_attempts=2)
+        # Legacy operations retain their two-attempt bound; preparation supplies its bounded policy.
+        for _ in range(passes):
+            result = self.queue.generate_batch(self.day, generator, resume=True, max_attempts=max_attempts,
+                                              context=context, before_generation=before_generation, generation_allowed=generation_allowed)
             require(result is not None, 'Daily generation failed to return saved queue state')
             if all(v['generation_status'] == 'ready' for v in result['videos']):
                 break
         bad = [SLOT_NAMES[v['slot']] for v in result['videos'] if v['generation_status'] != 'ready']
+        if not complete:
+            return result
         require(not bad, 'Incomplete three-video batch: ' + ', '.join(bad))
         require(len(result['videos']) == 3 and len(self.media) == 3, 'Three usable media artifacts required')
         return {'status': 'ready', 'generation_run_id': self.state['generation_run_id'], 'slots': list(SLOT_NAMES.values())}
 
-    def upload(self, slot, generation_run=None, uploader=None, notifier=None):
+    def upload(self, slot, generation_run=None, uploader=None, notifier=None, *, catch_up=False):
         require(slot in UPLOAD_TIMES, 'Select exactly one valid upload slot')
         self.load(generation_run)
+        require(self.day == india_now().date(), 'Legacy upload only accepts today in Asia/Kolkata')
+        require(not self.state['queue'].get('preparation'), 'Prepared batches must publish through YouTube publishAt')
+        items = self.queue.read(self.day)['videos']
+        if catch_up:
+            # Each item retains its original slot, claim, outcome and notification.
+            candidates = [v['slot'] for v in items if v['slot'] <= slot
+                          and v['generation_status'] == 'ready'
+                          and v['upload_status'] == 'pending'
+                          and not (v.get('youtube') or {}).get('success')
+                          and not (v.get('youtube') or {}).get('video_id')]
+            if not candidates:
+                return {'status': 'skipped', 'reason': 'no_ready_pending_item'}
+            results = []
+            for original_slot in candidates:
+                # Stop on an uncertain transfer or checkpoint/notification failure.
+                # Earlier successes are durable and will be skipped on the next run.
+                results.append({'slot': original_slot,
+                                'result': self._upload_ready_slot(original_slot, uploader, notifier)})
+            return {'status': 'uploaded', 'uploads': results}
+        return self._upload_ready_slot(slot, uploader, notifier)
+
+    def _upload_ready_slot(self, slot, uploader=None, notifier=None):
+        require(self.day == india_now().date(), "Legacy upload only accepts today in Asia/Kolkata")
         item = next(v for v in self.queue.read(self.day)['videos'] if v['slot'] == slot)
         require(item['upload_status'] == 'pending' and not (item.get('youtube') or {}).get('video_id'),
                 f'{SLOT_NAMES[slot]} already attempted ({item["upload_status"]}); no automatic retry')
@@ -377,8 +441,10 @@ def cleanup_production(store, root=BASE_DIR, now=None):
         if 0 <= (now.date() - day).days < 8:
             controller = Production(store, day, root)
             controller.load()
+            if controller.state['queue'].get('preparation') and controller.state['queue'].get('batch_status') != 'READY':
+                continue
             items = controller.queue.read(day)['videos']
-            eligible = [v['slot'] for v in items if _eligible(v, now) and v.get('cleanup', {}).get('status') != 'completed']
+            eligible = [v['slot'] for v in items if day < now.date() and _eligible(v, now) and v.get('cleanup', {}).get('status') != 'completed']
             controller.restore_media(eligible)
             controllers.append(controller)
     if not controllers:
@@ -392,6 +458,8 @@ def cleanup_production(store, root=BASE_DIR, now=None):
     require(result.get('status') == 'completed', 'Local guarded cleanup failed')
     require(all(not c.poisoned for c in controllers), 'Cleanup checkpoint failed; remote media retained')
     for controller in controllers:
+        if controller.day >= now.date():
+            continue
         data = queue.read(controller.day)
         for item in data['videos']:
             if not _eligible(item, now):
@@ -424,10 +492,11 @@ def restore_oauth():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['generate', 'upload', 'cleanup'])
-    parser.add_argument('--day', default='')
-    parser.add_argument('--slot', choices=UPLOAD_TIMES)
-    parser.add_argument('--generation-run', type=int)
+    parser.add_argument('operation', choices=['prepare', 'cleanup'])
+    parser.add_argument('--day', default='', help='Target publication date; tomorrow or explicit existing current-day recovery in Asia/Kolkata')
+    parser.add_argument("--confirmed-not-uploaded-slot", "--confirm-not-uploaded-slot",
+                        dest="confirmed_not_uploaded_slot", default="", choices=["", *UPLOAD_TIMES],
+                        help="Explicit Studio confirmation of absence; requires prepare --day")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
     for name in ('httpx', 'httpcore', 'googleapiclient.discovery_cache'):
@@ -436,30 +505,65 @@ def main():
         require(os.getenv('GITHUB_ACTIONS') == 'true', 'Use the manual production Actions workflow')
         require(os.environ.get('GITHUB_REF') == 'refs/heads/' + os.environ.get('PRODUCTION_BRANCH', ''),
                 'Production operations must run on the default branch')
-        day = date.fromisoformat(args.day) if args.day else india_now().date()
-        require(day == india_now().date(), 'Only today in Asia/Kolkata is allowed; historical uploads are blocked')
+        require(not args.confirmed_not_uploaded_slot or (args.operation == "prepare" and args.day),
+                "Confirmed-not-uploaded reconciliation requires prepare with an explicit --day")
+        started_at = india_now()
         store = GitHubArtifacts()
-        if args.operation == 'generate':
-            require(all(os.getenv(k) for k in ('OPENAI_API_KEY', 'PEXELS_API_KEY')), 'Missing generation API secrets')
-            if os.getenv('GITHUB_EVENT_NAME') == 'schedule':
-                require(india_now().hour < 8, 'Generation deadline already missed')
-            result = Production(store, day).generate()
-            if os.getenv('GITHUB_EVENT_NAME') == 'schedule':
-                require(india_now().hour < 8, 'Batch preserved, but 08:00 IST completion deadline was missed')
-        elif args.operation == 'upload':
-            require(all(os.getenv(k) for k in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID')), 'Missing Telegram secrets')
-            if os.getenv('GITHUB_EVENT_NAME') == 'workflow_dispatch':
-                require(args.generation_run is not None, 'Manual upload requires the explicit generation run ID')
-            restore_oauth()
-            result = Production(store, day).upload(args.slot, args.generation_run)
+        if args.operation == 'prepare':
+            from engine.scheduling.preparation import Preparation, target_day
+            day = target_day(started_at, args.day)
+            require(YOUTUBE_PRIVACY_STATUS == 'private', 'Production preparation requires private privacy')
+            require(os.getenv('YOUTUBE_CHANNEL_ID'), 'Missing expected YouTube channel identity')
+            def authenticate():
+                restore_oauth()
+                from engine.uploader.youtube_uploader import preparation_preflight
+                preparation_preflight(os.environ['YOUTUBE_CHANNEL_ID'])
+            def before_render():
+                require(all(os.getenv(k) for k in ('OPENAI_API_KEY', 'PEXELS_API_KEY')),
+                        'Missing generation API secrets')
+            recovery_result = None
+            if not args.day:
+                from engine.scheduling.preparation import TZ
+                today = started_at.astimezone(TZ).date()
+                # Inspect only today's existing checkpoint; never scan arbitrary pending history.
+                if store.latest(today) is not None:
+                    recovery = Preparation(store, today)
+                    recovery.load()
+                    if recovery.recoverable_slots(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'], now=india_now()):
+                        recovery_result = recovery.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'],
+                            authenticate=authenticate, before_render=before_render,
+                            allow_current_day=True, started_at=started_at)
+                    else:
+                        recovery_result = {'status': 'SKIPPED', 'target_date': str(today),
+                                           'reason': 'no_safe_future_work'}
+            controller = Preparation(store, day)
+            reconciliation = None
+            if args.confirmed_not_uploaded_slot:
+                reconciliation = controller.reconcile_not_uploaded(args.confirmed_not_uploaded_slot,
+                    expected_channel=os.environ["YOUTUBE_CHANNEL_ID"])
+            result = controller.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'],
+                                        authenticate=authenticate, before_render=before_render,
+                                        allow_current_day=bool(args.day), started_at=started_at)
+            if reconciliation is not None:
+                result["reconciliation"] = reconciliation
+            if recovery_result is not None:
+                result['current_day_recovery'] = recovery_result
+            if result['status'] == 'READY':
+                result['cleanup'] = cleanup_production(store)
         else:
             result = cleanup_production(store)
+        recovery = result.get('current_day_recovery', {})
+        incomplete = args.operation == 'prepare' and (
+            (result['status'] != 'READY' and not result.get('verification_pending')) or
+            (recovery.get('status') == 'PREPARING' and not recovery.get('verification_pending')))
+        pending = result.get('verification_pending') or recovery.get('verification_pending')
+        outcome = 'RECOVERABLE' if incomplete else ('VERIFICATION_PENDING' if pending else 'SUCCESS')
         message = json.dumps(result, ensure_ascii=False)
         print(message)
         if os.getenv('GITHUB_STEP_SUMMARY'):
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:
-                stream.write(f'Production {args.operation}: SUCCESS\n\n```json\n{message}\n```\n')
-        return 0
+                stream.write(f'Production {args.operation}: {outcome}\n\n```json\n{message}\n```\n')
+        return 1 if incomplete else 0
     except Exception as exc:
         # Never print arbitrary network/auth exception strings (they may contain credentials).
         cause = exc.__cause__ if isinstance(exc, CheckpointError) else exc
@@ -475,4 +579,7 @@ def main():
 
 
 if __name__ == '__main__':
+    # The preparation module shares this module's classes when invoked as a script.
+    import sys
+    sys.modules.setdefault('run_actions', sys.modules[__name__])
     raise SystemExit(main())

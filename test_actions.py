@@ -3,6 +3,8 @@ import builtins
 import copy
 from datetime import date, datetime, timedelta
 import json
+import os
+import run_actions
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 from engine.scheduling.cleanup import cleanup_recent
 from engine.scheduling.daily_queue import CheckpointError, DailyQueue
-from run_actions import GitHubArtifacts, Production, ProductionError, cleanup_production, validate_state
+from run_actions import GitHubArtifacts, Production, ProductionError, cleanup_production, generation_policy, validate_state
 
 DAY = date(2026, 9, 14)
 TZ = ZoneInfo('Asia/Kolkata')
@@ -63,6 +65,9 @@ class ProductionTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.store = Store()
         self.controller = Production(self.store, DAY, self.root)
+        clock = patch("run_actions.india_now", return_value=datetime(2026, 9, 14, 10, tzinfo=TZ))
+        clock.start()
+        self.addCleanup(clock.stop)
         self.count = 0
         self.metadata = {'Title': 'Exact title', 'Description': 'Exact description', 'Hashtags': ['#Mystery']}
         self.success = {'success': True, 'status': 'uploaded', 'video_id': 'id123',
@@ -89,6 +94,18 @@ class ProductionTests(unittest.TestCase):
         controller = controller or self.fresh()
         return controller.upload(slot, 100, uploader or Mock(return_value=self.success),
                                  notifier or Mock(return_value={'success': True, 'status': 'sent'}))
+
+    def test_legacy_upload_rejects_historical_queue_on_following_dates(self):
+        self.generated()
+        for offset in (1, 2):
+            uploader = Mock()
+            before = len(self.store.saved)
+            with patch("run_actions.india_now", return_value=datetime(2026,9,14,10,tzinfo=TZ)+timedelta(days=offset)):
+                with self.assertRaisesRegex(ProductionError, "only accepts today"):
+                    self.fresh().upload("19:00", uploader=uploader, catch_up=True)
+            uploader.assert_not_called()
+            self.assertEqual(len(self.store.saved), before)
+            self.assertTrue(all(v["upload_status"] == "pending" for v in self.controller.queue.read(DAY)["videos"]))
 
     def test_nonmonotonic_artifact_ids_do_not_poison_next_slot(self):
         # Actual ordering from run 36843732075: the ready receipt has a lower
@@ -240,6 +257,24 @@ class ProductionTests(unittest.TestCase):
         self.assertEqual(len(self.controller.media), 3)
         self.assertEqual(sum(a['name'].startswith('mystery-media-') for a in self.store.saved), 3)
 
+    def test_confirmed_checkpoint_survives_temporarily_older_rest_listing(self):
+        self.generated()
+        latest=self.store.latest(DAY)
+        original=self.store.artifacts
+        with patch.object(self.store,"artifacts",side_effect=lambda:[a for a in original() if a["id"] != latest["id"]]):
+            self.assertEqual(self.store.latest(DAY)["id"],latest["id"])
+            self.controller.queue.checkpoint=self.controller.checkpoint
+            self.controller.queue.update(DAY,lambda saved:{**saved,"confirmed_marker":True})
+        self.assertTrue(self.controller.state["queue"]["confirmed_marker"])
+        self.assertFalse(self.controller.poisoned)
+
+    def test_reloading_state_is_read_only_even_with_checkpoint_callback_attached(self):
+        self.generated()
+        self.controller.queue.checkpoint=self.controller.checkpoint
+        before=len(self.store.saved)
+        self.controller.load()
+        self.assertEqual(len(self.store.saved),before)
+
     def test_stale_checkpoint_refused(self):
         self.generated()
         first, second = self.fresh(), self.fresh()
@@ -365,32 +400,141 @@ class ProductionTests(unittest.TestCase):
         with self.assertRaisesRegex(ProductionError, 'fingerprint mismatch'):
             self.upload()
 
-    def test_workflow_schedules_public_privacy_and_shared_concurrency(self):
+    def test_daily_workflow_and_shared_concurrency(self):
         text = (Path(__file__).parent / '.github/workflows/production.yml').read_text(encoding='utf-8-sig')
         active = '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
         self.assertIn('workflow_dispatch:', active)
-        # Actions trigger times differ from the local scheduler's slot labels.
-        expected = [
-            ('5 5 * * *', 'generate', ''),
-            ('5 10 * * *', 'upload', '10:00'),
-            ('5 14 * * *', 'upload', '14:00'),
-            ('5 19 * * *', 'upload', '19:00'),
-            ('35 * * * *', 'cleanup', ''),
-        ]
-        schedule = active.split('  schedule:\n', 1)[1].split('\nconcurrency:', 1)[0]
-        entries = [line.strip() for line in schedule.splitlines() if line.strip()]
-        self.assertEqual(entries, [line for cron, _, _ in expected for line in
-                                  (f"- cron: '{cron}'", 'timezone: Asia/Kolkata')])
-        routing = active.split('const schedules = {', 1)[1].split('};', 1)[0]
-        self.assertEqual([line.strip() for line in routing.splitlines() if line.strip()],
-                         [f"'{cron}': ['{operation}', '{slot}']," for cron, operation, slot in expected])
-        self.assertIn('context.eventName === \'schedule\'', active)
-        self.assertIn('schedules[process.env.EVENT_SCHEDULE]', active)
+        self.assertNotIn('  schedule:', active)
+        import re
+        self.assertEqual(re.findall(r"cron: '([^']+)'", active),
+                         [])
+        self.assertNotIn('35 * * * *', active)
+        self.assertNotIn('22:00', active)
         self.assertIn('group: mystery-production-state', active)
         self.assertIn('cancel-in-progress: false', active)
         self.assertNotIn('run_scheduler.py', active)
-        self.assertIn('YOUTUBE_PRIVACY_STATUS: public', active)
+        self.assertIn('YOUTUBE_PRIVACY_STATUS: private', active)
+        self.assertIn('queue: max', active)
         self.assertNotIn('pull_request:', active)
+
+    def test_cleanup_never_deletes_current_day_artifacts(self):
+        self.generated()
+        stamp = datetime(2026, 9, 14, 0, tzinfo=TZ)
+        with patch('engine.scheduling.daily_queue.india_now', return_value=stamp - timedelta(days=2)):
+            self.upload()
+        before = self.store.latest(DAY)['id']
+        root = self.root / 'cleanup-today'
+        root.mkdir()
+        cleanup_production(self.store, root, stamp + timedelta(hours=20))
+        self.assertEqual(self.store.deleted, [])
+        self.assertEqual(self.store.latest(DAY)['id'], before)
+
+    def test_later_scheduled_upload_consumes_ready_missed_item(self):
+        self.generated()
+        controller = self.fresh()
+        controller.load()
+        controller.queue.checkpoint = controller.checkpoint
+        controller.queue._set(DAY, '10:00', {'generation_status': 'generating'})
+        before = self.store.latest(DAY)['id']
+        uploader = Mock(return_value=self.success)
+        result = self.fresh().upload('10:00', 100, uploader, Mock(), catch_up=True)
+        self.assertEqual(result['status'], 'skipped')
+        uploader.assert_not_called()
+        self.assertEqual(before, self.store.latest(DAY)['id'])
+        controller.queue._set(DAY, '10:00', {'generation_status': 'ready'})
+        with patch.object(DailyQueue, 'generate_batch', side_effect=AssertionError('No regeneration')):
+            self.fresh().upload('14:00', 100, uploader,
+                                Mock(return_value={'success': True}), catch_up=True)
+        self.assertEqual(uploader.call_count, 2)
+        state = json.loads(self.store.latest(DAY)['bytes'])
+        self.assertEqual(state['queue']['videos'][0]['upload_status'], 'uploaded')
+        self.assertEqual(state['queue']['videos'][1]['upload_status'], 'uploaded')
+
+    def catch_up(self, slot, uploader=None, notifier=None):
+        return self.fresh().upload(slot, 100, uploader or Mock(return_value=self.success),
+                                   notifier or Mock(return_value={'success': True}), catch_up=True)
+
+    def test_normal_scheduled_uploads_one_per_slot(self):
+        self.generated()
+        for slot in ('10:00', '14:00', '19:00'):
+            result = self.catch_up(slot)
+            self.assertEqual([v['slot'] for v in result['uploads']], [slot])
+        uploader = Mock()
+        self.assertEqual(self.catch_up('19:00', uploader)['status'], 'skipped')
+        uploader.assert_not_called()
+
+    def test_missed_first_slot_catches_up_two_then_one(self):
+        self.generated()
+        result = self.catch_up('14:00')
+        self.assertEqual([v['slot'] for v in result['uploads']], ['10:00', '14:00'])
+        self.assertEqual([v['slot'] for v in self.catch_up('19:00')['uploads']], ['19:00'])
+
+    def test_final_slot_catches_up_all_in_original_order(self):
+        self.generated()
+        uploader = Mock(return_value=self.success)
+        notifier = Mock(return_value={'success': True})
+        result = self.catch_up('19:00', uploader, notifier)
+        self.assertEqual([v['slot'] for v in result['uploads']], ['10:00', '14:00', '19:00'])
+        self.assertEqual([Path(c.args[0]).read_bytes() for c in uploader.call_args_list],
+                         [b'fixture media 1', b'fixture media 2', b'fixture media 3'])
+        self.assertEqual(notifier.call_count, 3)
+
+    def test_public_catch_up_checkpoints_each_claim_and_notifies_each_success(self):
+        with patch.dict(os.environ, {'YOUTUBE_PRIVACY_STATUS': 'public'}), \
+             patch('run_actions.YOUTUBE_PRIVACY_STATUS', 'public'):
+            self.generated()
+            seen = []
+            def upload(path, metadata):
+                state = json.loads(self.store.latest(DAY)['bytes'])
+                index = len(seen)
+                self.assertEqual(state['privacy_status'], 'public')
+                self.assertEqual(state['queue']['videos'][index]['upload_status'], 'uploading')
+                self.assertTrue(all(v['upload_status'] == 'uploaded'
+                                    for v in state['queue']['videos'][:index]))
+                self.assertTrue(all(v['upload_status'] == 'pending'
+                                    for v in state['queue']['videos'][index + 1:]))
+                seen.append(path)
+                return {**self.success, 'video_id': f'id{index}', 'privacy_status': 'public'}
+            notifier = Mock(return_value={'success': True})
+            self.catch_up('19:00', Mock(side_effect=upload), notifier)
+            self.assertEqual(len(seen), 3)
+            self.assertEqual(notifier.call_count, 3)
+            self.assertTrue(all(c.args[0]['upload']['privacy_status'] == 'public'
+                                for c in notifier.call_args_list))
+
+    def test_partial_ready_queue_uploads_only_ready_then_remaining(self):
+        self.generated()
+        controller = self.fresh()
+        controller.load()
+        controller.queue.checkpoint = controller.checkpoint
+        for slot in ('10:00', '19:00'):
+            controller.queue._set(DAY, slot, {'generation_status': 'generating'})
+        result = self.catch_up('14:00')
+        self.assertEqual([v['slot'] for v in result['uploads']], ['14:00'])
+        controller.load()
+        for slot in ('10:00', '19:00'):
+            controller.queue._set(DAY, slot, {'generation_status': 'ready'})
+        result = self.catch_up('19:00')
+        self.assertEqual([v['slot'] for v in result['uploads']], ['10:00', '19:00'])
+
+    def test_catch_up_skips_attempted_and_uncertain_items(self):
+        self.generated()
+        controller = self.fresh()
+        controller.load()
+        controller.queue.checkpoint = controller.checkpoint
+        controller.queue._set(DAY, '10:00', {'upload_status': 'uncertain'})
+        controller.queue._set(DAY, '14:00', {'upload_status': 'uploading'})
+        self.assertEqual([v['slot'] for v in self.catch_up('19:00')['uploads']], ['19:00'])
+
+    def test_catch_up_stops_on_uncertain_result_without_claiming_later_items(self):
+        self.generated()
+        uploader = Mock(side_effect=[self.success, {'success': False, 'status': 'uncertain'}])
+        with self.assertRaises(ProductionError):
+            self.catch_up('19:00', uploader)
+        self.assertEqual(uploader.call_count, 2)
+        state = json.loads(self.store.latest(DAY)['bytes'])
+        self.assertEqual([v['upload_status'] for v in state['queue']['videos']],
+                         ['uploaded', 'uncertain', 'pending'])
 
 
 class ArtifactTrustTests(unittest.TestCase):

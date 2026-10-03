@@ -1,55 +1,39 @@
 name: Mystery Shorts production
-run-name: Mystery production - ${{ inputs.operation || github.event.schedule }} - ${{ inputs.slot || 'batch' }}
+run-name: Mystery preparation - ${{ inputs.day || 'tomorrow' }}
 
 on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Production operation (no automatic schedule enabled)
+        description: Prepare tomorrow or conservatively clean historical READY batches
         required: true
         type: choice
-        options: [generate, upload, cleanup]
+        options: [prepare, cleanup]
+        default: prepare
       day:
-        description: 'Generation date YYYY-MM-DD in IST; blank means today'
+        description: 'Target publication date YYYY-MM-DD; blank means tomorrow in IST'
         required: false
         type: string
-      slot:
-        description: Upload exactly this slot (ignored for generation/cleanup)
-        required: true
-        type: choice
-        options: ['10:00', '14:00', '19:00']
-      generation_run:
-        description: 'For manual upload: original generation run ID from its summary'
+      confirmed_not_uploaded_slot:
+        description: 'Slot manually verified as not uploaded; blank means none'
         required: false
         type: string
-  # 05:05 provides a 2-hour 55-minute window before the 08:00 completion deadline.
-  schedule:
-    - cron: '5 5 * * *'
-      timezone: Asia/Kolkata
-    - cron: '5 10 * * *'
-      timezone: Asia/Kolkata
-    - cron: '5 14 * * *'
-      timezone: Asia/Kolkata
-    - cron: '5 19 * * *'
-      timezone: Asia/Kolkata
-    - cron: '35 * * * *'
-      timezone: Asia/Kolkata
+        default: ''
 
-# One shared group for ALL dates and operations. Do not change to a per-run group.
-# GitHub can replace pending runs; a replacement must be re-dispatched if needed.
 concurrency:
   group: mystery-production-state
   cancel-in-progress: false
+  queue: max
 
 permissions:
   contents: read
-  actions: write # Read cross-run artifacts and delete eligible generated media.
+  actions: write
 
 jobs:
   production:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
-    timeout-minutes: 170
+    timeout-minutes: 360
     defaults:
       run:
         shell: bash
@@ -65,50 +49,39 @@ jobs:
           node-version: '20'
       - name: Install project dependencies
         run: python -m pip install -r requirements.txt
-      - name: Install FFmpeg for generation
-        if: inputs.operation == 'generate' || github.event.schedule == '5 5 * * *'
+      - name: Install FFmpeg for preparation
+        if: inputs.operation != 'cleanup'
         run: |
           sudo apt-get update
           sudo apt-get install --yes ffmpeg
       - name: Install official artifact client in runner scratch space
         run: npm install --prefix "$RUNNER_TEMP/artifact-client" --no-audit --no-fund --ignore-scripts @actions/artifact@2.3.2
-      - name: Run existing queue operation with durable artifact checkpoints
+      - name: Prepare tomorrow with durable artifact checkpoints
         uses: actions/github-script@v7
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PRODUCTION_BRANCH: ${{ github.event.repository.default_branch }}
           INPUT_OPERATION: ${{ inputs.operation }}
           INPUT_DAY: ${{ inputs.day }}
-          INPUT_SLOT: ${{ inputs.slot }}
-          INPUT_GENERATION_RUN: ${{ inputs.generation_run }}
-          EVENT_SCHEDULE: ${{ github.event.schedule }}
-          OPENAI_API_KEY: ${{ (inputs.operation == 'generate' || github.event.schedule == '5 5 * * *') && secrets.OPENAI_API_KEY || '' }}
-          PEXELS_API_KEY: ${{ (inputs.operation == 'generate' || github.event.schedule == '5 5 * * *') && secrets.PEXELS_API_KEY || '' }}
-          YOUTUBE_TOKEN_PICKLE_B64: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.YOUTUBE_TOKEN_PICKLE_B64 || '' }}
-          TELEGRAM_BOT_TOKEN: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_BOT_TOKEN || '' }}
-          TELEGRAM_CHAT_ID: ${{ (inputs.operation == 'upload' || (github.event_name == 'schedule' && github.event.schedule != '5 5 * * *' && github.event.schedule != '35 * * * *')) && secrets.TELEGRAM_CHAT_ID || '' }}
-          YOUTUBE_PRIVACY_STATUS: public
+          INPUT_CONFIRMED_NOT_UPLOADED_SLOT: ${{ inputs.confirmed_not_uploaded_slot }}
+          OPENAI_API_KEY: ${{ inputs.operation != 'cleanup' && secrets.OPENAI_API_KEY || '' }}
+          PEXELS_API_KEY: ${{ inputs.operation != 'cleanup' && secrets.PEXELS_API_KEY || '' }}
+          YOUTUBE_TOKEN_PICKLE_B64: ${{ inputs.operation != 'cleanup' && secrets.YOUTUBE_TOKEN_PICKLE_B64 || '' }}
+          YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ inputs.operation != 'cleanup' && secrets.TELEGRAM_BOT_TOKEN || '' }}
+          TELEGRAM_CHAT_ID: ${{ inputs.operation != 'cleanup' && secrets.TELEGRAM_CHAT_ID || '' }}
+          YOUTUBE_PRIVACY_STATUS: private
           FFMPEG_BINARY: /usr/bin/ffmpeg
           IMAGEIO_FFMPEG_EXE: /usr/bin/ffmpeg
           PYTHONUNBUFFERED: '1'
         with:
           script: |
-            // A JavaScript action supplies the runtime credentials required by the
-            // official artifact client. The child inherits them without printing them.
-            const schedules = {
-              '5 5 * * *': ['generate', ''],
-              '5 10 * * *': ['upload', '10:00'],
-              '5 14 * * *': ['upload', '14:00'],
-              '5 19 * * *': ['upload', '19:00'],
-              '35 * * * *': ['cleanup', ''],
-            };
-            const selected = context.eventName === 'schedule'
-              ? schedules[process.env.EVENT_SCHEDULE]
-              : [process.env.INPUT_OPERATION, process.env.INPUT_SLOT];
-            if (!selected) throw new Error('Unknown production schedule');
-            const args = ['run_actions.py', selected[0]];
-            if (selected[0] === 'upload') args.push('--slot', selected[1]);
-            if (process.env.INPUT_DAY) args.push('--day', process.env.INPUT_DAY);
-            if (process.env.INPUT_GENERATION_RUN) args.push('--generation-run', process.env.INPUT_GENERATION_RUN);
+            const inputs = context.payload.inputs || {};
+            const operation = inputs.operation || 'prepare';
+            const args = ['run_actions.py', operation];
+            if (inputs.day) args.push('--day', inputs.day);
+            if (inputs.confirmed_not_uploaded_slot) {
+              args.push('--confirmed-not-uploaded-slot', inputs.confirmed_not_uploaded_slot);
+            }
             await exec.exec('python', args, {env: {...process.env,
               ARTIFACT_MODULE: `${process.env.RUNNER_TEMP}/artifact-client/node_modules/@actions/artifact`}});

@@ -113,7 +113,7 @@ class DailyQueue:
                 self._write(day, changed)
             return changed
 
-    def generate_batch(self, day=None, generator=None, *, slots=None, resume=False, max_attempts=2):
+    def generate_batch(self, day=None, generator=None, *, slots=None, resume=False, max_attempts=2, context=None, before_generation=None, generation_allowed=None):
         day = day or india_now().date()
         generator = generator or generate_only
         slots = list(UPLOAD_TIMES if slots is None else slots)
@@ -133,7 +133,7 @@ class DailyQueue:
                      "video_path": None, "metadata": None, "idea": None, "script": None,
                      "youtube": None, "telegram": None, "generation_completed_at": None,
                      "generated_files": [], "cleanup": {"status": "pending"}} for slot in slots
-                ]}
+                ], **(context or {})}
                 if existing is None:
                     self.update(day, lambda existing: data if existing is None else None)
                 logger.info("Daily batch started for %s", day)
@@ -144,7 +144,17 @@ class DailyQueue:
                     attempts = current.get("generation_attempts", 0)
                     if attempts >= max_attempts:
                         continue
-                    self._set(day, slot, {"generation_status": "generating", "generation_attempts": attempts + 1})
+                    if generation_allowed is not None and not generation_allowed(slot):
+                        logger.info("%s: target publication time elapsed; preserve slot", slot)
+                        continue
+                    if before_generation is not None:
+                        before_generation()
+                    history = list(current.get("generation_attempt_history", []))
+                    history.append({"attempt": attempts + 1, "started_at": india_now().isoformat() if context else None,
+                                    "previous_status": current["generation_status"],
+                                    "previous_error": current.get("generation_error")})
+                    self._set(day, slot, {"generation_status": "generating", "generation_attempts": attempts + 1,
+                                          "generation_attempt_history": history})
                     try:
                         result = generator()
                         completed_at = india_now().isoformat()
