@@ -87,5 +87,138 @@ class HistoricalImporterTests(unittest.TestCase):
         subprocess.run([sys.executable, "-B", "-c", code], check=True, capture_output=True)
 
 
+class HistoricalExecutionTests(unittest.TestCase):
+    def setUp(self):
+        from contextlib import contextmanager
+        from types import SimpleNamespace
+        from psycopg.pq import TransactionStatus
+        from unittest.mock import Mock
+        self.preview = json.loads(Path("phase2_5_learning_preview.json").read_text(encoding="utf-8"))
+        self.plan = build_plan(self.preview)
+        self.inventory = {}
+        self.calls = []
+        self.connection = Mock()
+        self.connection.info.transaction_status = TransactionStatus.IDLE
+        @contextmanager
+        def transaction(**kwargs):
+            before = copy.deepcopy(self.inventory)
+            try:
+                yield
+            except Exception:
+                self.inventory = before
+                raise
+            finally:
+                if kwargs.get("force_rollback"):
+                    self.inventory = before
+        self.connection.transaction.side_effect = transaction
+        self.fail_table = None
+        self.repo = Mock()
+        for method, spec in zip(("create_profile", "create_generation", "create_published_video", "create_features"),
+                                __import__("engine.learning.historical_importer", fromlist=["SPECS"]).SPECS):
+            def create(record, table=spec[1]):
+                self.calls.append(table)
+                if table == self.fail_table:
+                    raise RuntimeError("password=secret-driver-value")
+                self.inventory.setdefault(table, []).append(record.model_dump(mode="json"))
+            getattr(self.repo, method).side_effect = create
+
+    def execute(self):
+        from unittest.mock import patch
+        from engine.learning.historical_importer import execute_import
+        with patch("engine.learning.historical_importer._destination_plan",
+                   side_effect=lambda *a, **k: build_plan(self.preview, self.inventory)), \
+             patch("engine.learning.repositories.LearningRepository", return_value=self.repo):
+            return execute_import(self.preview, self.plan, self.connection,
+                                  confirmed_channel=self.plan["channel"], accept_administrative_timestamps=True)
+
+    def test_empty_destination_atomic_import_and_readonly_preflight(self):
+        result = self.execute()
+        self.assertEqual(result["transaction_result"], "COMMITTED")
+        self.assertEqual(len(result["inserted"]), 4)
+        self.assertEqual(self.calls, [r["table"] for r in self.plan["rows"]])
+        self.assertEqual(self.connection.execute.call_args_list[0].args, ("SET TRANSACTION READ ONLY",))
+
+    def test_actual_destination_queries_include_global_youtube_identity(self):
+        from unittest.mock import MagicMock
+        from engine.learning.historical_importer import _destination_plan
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.execute.return_value.fetchall.return_value = []
+        plan = _destination_plan(connection, self.preview, schema="learning")
+        self.assertTrue(plan["plan_valid"])
+        calls = cursor.execute.call_args_list
+        self.assertEqual(len(calls), 4)
+        query, values = calls[2].args
+        self.assertIn('OR youtube_video_id = %s', query.as_string())
+        self.assertEqual(values[1], "iyrVp9tEMVw")
+        self.assertNotIn('channel_context_id =', query.as_string())
+
+    def test_repeat_is_idempotent(self):
+        self.execute()
+        result = self.execute()
+        self.assertEqual(len(result["skipped_identical"]), 4)
+        self.assertEqual(result["inserted"], [])
+        self.assertEqual(len(self.calls), 4)
+
+    def test_identical_existing_record_skipped(self):
+        row = self.plan["rows"][0]
+        self.inventory[row["table"]] = [row["record"]]
+        result = self.execute()
+        self.assertEqual(len(result["inserted"]), 3)
+        self.assertEqual(len(result["skipped_identical"]), 1)
+
+    def test_conflict_rejected_without_writes(self):
+        row = copy.deepcopy(self.plan["rows"][1])
+        row["record"]["script"] = "conflicting evidence"
+        self.inventory[row["table"]] = [row["record"]]
+        result = self.execute()
+        self.assertTrue(result["rejected_conflict"])
+        self.assertEqual(self.calls, [])
+        self.assertEqual(result["transaction_result"], "NOT_STARTED")
+
+    def test_duplicate_candidate_rejected_before_connection(self):
+        self.preview["generation_candidates"] *= 2
+        self.assertTrue(self.execute()["failed"])
+        self.connection.transaction.assert_not_called()
+
+    def test_partial_failure_rolls_back_every_record_and_sanitizes(self):
+        self.fail_table = "published_videos"
+        result = self.execute()
+        self.assertEqual(self.inventory, {})
+        self.assertEqual(result["inserted"], [])
+        self.assertTrue(result["failed"])
+        self.assertNotIn("secret-driver-value", json.dumps(result))
+
+    def test_foreign_channel_and_bad_reference_blocked(self):
+        row = copy.deepcopy(self.plan["rows"][1])
+        row["record"]["channel_context_id"] = "foreign-channel"
+        self.inventory[row["table"]] = [row["record"]]
+        self.assertTrue(self.execute()["rejected_conflict"])
+        self.assertEqual(self.calls, [])
+        self.preview["publication_candidates"][0]["generation_reference"]["record_id"] = "wrong"
+        self.assertTrue(self.execute()["failed"])
+        self.assertEqual(self.calls, [])
+
+    def test_explicit_confirmation_required_and_plan_tampering_rejected(self):
+        from engine.learning.historical_importer import execute_import
+        result = execute_import(self.preview, self.plan, self.connection, confirmed_channel="wrong")
+        self.assertTrue(result["failed"])
+        self.connection.transaction.assert_not_called()
+        self.plan["rows"][0]["record"]["identity"] = "changed"
+        self.assertTrue(self.execute()["failed"])
+
+    def test_destination_changes_after_preflight_rechecked_before_insert(self):
+        from unittest.mock import patch
+        from engine.learning.historical_importer import execute_import
+        changed = copy.deepcopy(self.plan)
+        changed["plan_valid"] = False
+        changed["rows"][0]["action"] = "CONFLICT"
+        with patch("engine.learning.historical_importer._destination_plan", side_effect=[self.plan, changed]):
+            result = execute_import(self.preview, self.plan, self.connection,
+                                   confirmed_channel=self.plan["channel"], accept_administrative_timestamps=True)
+        self.assertTrue(result["rejected_conflict"])
+        self.assertEqual(self.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()

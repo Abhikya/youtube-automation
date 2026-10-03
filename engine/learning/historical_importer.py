@@ -1,4 +1,4 @@
-"""Offline historical import planning. No database driver, repository or API imports."""
+"""Historical import planning with opt-in execution; dry runs have no database imports."""
 import argparse
 import hashlib
 import json
@@ -117,12 +117,123 @@ def build_plan(preview, existing=None):
                                      "Preview administrative timestamps must be resolved before live import; no timestamps changed or invented here"]}
 
 
+
+def _destination_plan(connection, preview, *, schema):
+    """Read only the proposed identities, including globally unique YouTube IDs."""
+    from psycopg import sql
+    from psycopg.rows import dict_row
+    from engine.learning.mapping import from_row
+    inventory = {}
+    for source, table, model, field, identity in SPECS:
+        value = preview["proposed_storage_identities"][identity]
+        clause = sql.SQL("{} = %s").format(sql.Identifier(field))
+        values = [value]
+        if model is PublishedVideo:
+            clause += sql.SQL(" OR youtube_video_id = %s")
+            values.append(preview[source][0]["youtube_video_id"])
+        query = sql.SQL("SELECT * FROM {} WHERE {}").format(sql.Identifier(schema, table), clause)
+        with connection.cursor(row_factory=dict_row) as cursor:
+            rows = cursor.execute(query, values).fetchall()
+        # Reuse the existing adapter for PostgreSQL NUMERIC/timestamp handling.
+        # Preserve actual ownership so build_plan rejects cross-channel matches.
+        inventory[table] = [from_row(model, row, channel_context_id=row["channel_context_id"])
+                            .model_dump(mode="json") for row in rows]
+    return build_plan(preview, inventory)
+
+
+def execute_import(preview, plan, connection, *, confirmed_channel, accept_administrative_timestamps=False,
+                   schema="learning"):
+    """Explicit execution on a borrowed idle connection; never opens a connection.
+
+    Reports contain only approved identities and fixed status codes, never driver
+    messages or record payloads. A successful receipt follows transaction commit.
+    """
+    report = {"inserted": [], "skipped_identical": [], "rejected_conflict": [],
+              "failed": [], "transaction_result": "NOT_STARTED"}
+    def identity(row):
+        return {"table": row["table"], "storage_id": row["storage_id"]}
+    try:
+        expected = build_plan(preview)
+        if plan != expected or not expected["plan_valid"]:
+            report["rejected_conflict"] = [identity(r) for r in expected["rows"] if r["action"] == "CONFLICT"]
+            report["failed"] = ["INVALID_OR_CHANGED_PLAN"]
+            return report
+        if confirmed_channel != expected["channel"] or not accept_administrative_timestamps:
+            report["failed"] = ["EXPLICIT_CONFIRMATION_REQUIRED"]
+            return report
+        from psycopg import sql
+        from psycopg.pq import TransactionStatus
+        from engine.learning.repositories import LearningRepository
+        if connection.info.transaction_status != TransactionStatus.IDLE:
+            report["failed"] = ["IDLE_CONNECTION_REQUIRED"]
+            return report
+        # No writes, DDL, migrations or locks in this first destination inspection.
+        with connection.transaction(force_rollback=True):
+            connection.execute("SET TRANSACTION READ ONLY")
+            checked = _destination_plan(connection, preview, schema=schema)
+        if not checked["plan_valid"]:
+            report["rejected_conflict"] = [identity(r) for r in checked["rows"] if r["action"] == "CONFLICT"]
+            report["failed"] = ["DESTINATION_CONFLICT"]
+            return report
+        repository = LearningRepository(connection, expected["channel"], schema=schema)
+        staged = []
+        skipped = []
+        with connection.transaction():
+            # Serialize destination comparison and insertion against other writers.
+            tables = sql.SQL(", ").join(sql.Identifier(schema, spec[1]) for spec in SPECS)
+            connection.execute(sql.SQL("LOCK TABLE {} IN SHARE ROW EXCLUSIVE MODE").format(tables))
+            checked = _destination_plan(connection, preview, schema=schema)
+            if not checked["plan_valid"]:
+                report["rejected_conflict"] = [identity(r) for r in checked["rows"] if r["action"] == "CONFLICT"]
+                raise ValueError("destination conflict")
+            methods = (repository.create_profile, repository.create_generation,
+                       repository.create_published_video, repository.create_features)
+            for row, spec, create in zip(checked["rows"], SPECS, methods):
+                if row["action"] == "SKIP_ALREADY_EXISTS":
+                    skipped.append(identity(row))
+                else:
+                    create(spec[2].model_validate(row["record"]))
+                    staged.append(identity(row))
+        report.update(inserted=staged, skipped_identical=skipped, transaction_result="COMMITTED")
+    except Exception:
+        # Includes preflight, constraint, write and commit failures; no exception text.
+        report.update(inserted=[], skipped_identical=[], failed=["IMPORT_FAILED"],
+                      transaction_result="ROLLED_BACK_OR_NOT_STARTED")
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--preview", default="phase2_5_learning_preview.json")
     parser.add_argument("--existing", help="Optional local JSON table inventory for idempotency/conflict simulation")
-    parser.add_argument("--output", help="Local JSON output only; no apply/write-database mode exists")
+    parser.add_argument("--output", help="Local plan or execution receipt JSON output")
+    parser.add_argument("--execute", action="store_true", help="Explicit live transactional import")
+    parser.add_argument("--plan", default="phase2_6_import_plan.json")
+    parser.add_argument("--confirm-channel")
+    parser.add_argument("--accept-preview-administrative-timestamps", action="store_true")
     args = parser.parse_args()
+    if args.execute:
+        if args.existing or not args.confirm_channel or not args.accept_preview_administrative_timestamps:
+            parser.error("Execution requires channel/timestamp confirmation and forbids offline inventory")
+        try:
+            preview = json.loads(Path(args.preview).read_text(encoding="utf-8"))
+            saved = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+            # Validate authorization and exact plan BEFORE opening the database.
+            if saved != build_plan(preview) or not saved["plan_valid"] or args.confirm_channel != saved["channel"]:
+                raise ValueError("invalid plan")
+            from engine.learning.database import connect_database
+            with connect_database() as connection:
+                receipt = execute_import(preview, saved, connection, confirmed_channel=args.confirm_channel,
+                                         accept_administrative_timestamps=True)
+        except Exception:
+            receipt = {"inserted": [], "skipped_identical": [], "rejected_conflict": [],
+                       "failed": ["IMPORT_FAILED"], "transaction_result": "ROLLED_BACK_OR_NOT_STARTED"}
+        rendered = json.dumps(receipt, sort_keys=True, indent=2) + "\n"
+        if args.output:
+            Path(args.output).write_text(rendered, encoding="utf-8")
+        else:
+            print(rendered, end="")
+        return 0 if receipt["transaction_result"] == "COMMITTED" else 1
     plan = build_plan(json.loads(Path(args.preview).read_text(encoding="utf-8")),
                       json.loads(Path(args.existing).read_text(encoding="utf-8")) if args.existing else None)
     rendered = json.dumps(plan, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
