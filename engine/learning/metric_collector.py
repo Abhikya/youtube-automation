@@ -30,6 +30,7 @@ def authenticated_channel_preflight(profile, *, service_factory=None):
     Missing/invalid profiles are caller errors. Authentication and lookup failures
     return fixed codes, without exception text or credentials. Caller may collect
     only when collection_authorized is true; this function never collects metrics.
+    Existing noninteractive authentication may refresh/save local credentials.
     """
     from engine.learning.schema import ChannelProfile
     if not isinstance(profile, ChannelProfile):
@@ -41,7 +42,7 @@ def authenticated_channel_preflight(profile, *, service_factory=None):
         if service_factory is None:
             from engine.uploader.youtube_uploader import get_authenticated_service
             service_factory = get_authenticated_service
-        service = service_factory(allow_interactive=False, read_only=True)
+        service = service_factory(allow_interactive=False)
     except Exception:
         return result
     try:

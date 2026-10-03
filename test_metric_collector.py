@@ -191,11 +191,11 @@ class AuthenticatedChannelPreflightTests(unittest.TestCase):
         self.assertEqual(result["authenticated_channel_id"], "platform-channel")
         self.assertIsNone(self.profile.youtube_channel_id)
 
-    def test_match_uses_mine_lookup_and_readonly_auth(self):
+    def test_match_uses_mine_lookup_and_existing_noninteractive_auth(self):
         result = self.preflight()
         self.assertEqual(result["status"], "MATCH")
         self.assertTrue(result["collection_authorized"])
-        self.factory.assert_called_once_with(allow_interactive=False, read_only=True)
+        self.factory.assert_called_once_with(allow_interactive=False)
         self.service.channels.return_value.list.assert_called_once_with(part="id", mine=True, fields="items/id,nextPageToken")
         self.service.close.assert_called_once()
 
@@ -249,6 +249,52 @@ class AuthenticatedChannelPreflightTests(unittest.TestCase):
         self.service.channels.return_value.insert.assert_not_called()
         self.service.channels.return_value.update.assert_not_called()
         self.service.channels.return_value.delete.assert_not_called()
+
+    def test_expired_token_refreshes_and_preflight_continues_without_mapping(self):
+        from unittest.mock import patch, mock_open
+        from engine.uploader import youtube_uploader as auth
+        from engine.learning.metric_collector import authenticated_channel_preflight
+        self.profile.youtube_channel_id = None
+        before = self.profile.model_dump()
+        credentials = Mock(valid=False, expired=True, refresh_token="fixture-only")
+        with patch.object(auth.os.path, "isfile", return_value=True), \
+             patch("builtins.open", mock_open()) as opened, \
+             patch.object(auth.pickle, "load", return_value=credentials), \
+             patch.object(auth.pickle, "dump") as dump, \
+             patch.object(auth, "Request") as request, \
+             patch.object(auth, "build", return_value=self.service), \
+             patch.object(auth.InstalledAppFlow, "from_client_secrets_file") as interactive:
+            result = authenticated_channel_preflight(self.profile)
+            self.assertEqual(result["status"], "MAPPING_REQUIRED")
+            self.assertFalse(result["collection_authorized"])
+            credentials.refresh.assert_called_once_with(request.return_value)
+            dump.assert_called_once_with(credentials, opened.return_value)
+            self.assertIn((auth.YOUTUBE_TOKEN_FILE, "wb"), [c.args for c in opened.call_args_list])
+            interactive.assert_not_called()
+        self.assertEqual(self.profile.model_dump(), before)
+        self.service.videos.assert_not_called()
+
+    def test_refresh_failure_returns_authentication_failed_without_save_or_lookup(self):
+        from unittest.mock import patch, mock_open
+        from engine.uploader import youtube_uploader as auth
+        from engine.learning.metric_collector import authenticated_channel_preflight
+        before = self.profile.model_dump()
+        credentials = Mock(valid=False, expired=True, refresh_token="fixture-only")
+        credentials.refresh.side_effect = RuntimeError("secret-refresh-error")
+        with patch.object(auth.os.path, "isfile", return_value=True), \
+             patch("builtins.open", mock_open()), \
+             patch.object(auth.pickle, "load", return_value=credentials), \
+             patch.object(auth.pickle, "dump") as dump, \
+             patch.object(auth, "Request"), patch.object(auth, "build") as build:
+            result = authenticated_channel_preflight(self.profile)
+            self.assertEqual(result["status"], "AUTHENTICATION_FAILED")
+            self.assertFalse(result["collection_authorized"])
+            self.assertNotIn("secret-refresh-error", str(result))
+            dump.assert_not_called()
+            build.assert_not_called()
+        self.assertEqual(self.profile.model_dump(), before)
+        self.service.channels.assert_not_called()
+        self.service.videos.assert_not_called()
 
     def test_existing_auth_readonly_rejects_missing_or_expired_token(self):
         from unittest.mock import patch, mock_open

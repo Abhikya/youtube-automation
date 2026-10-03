@@ -81,10 +81,12 @@ counters and current observation time for manual verification, not a persisted s
 ## Authenticated-channel read-only preflight (Phase 2.6)
 
 `authenticated_channel_preflight(profile)` accepts an existing ChannelProfile and
-uses the existing authentication helper with `allow_interactive=False, read_only=True`.
-It requires an already-valid local token. Missing/expired credentials are rejected;
-interactive consent, token refresh (including HTTP-client refresh) and token writes
-are disabled for this invocation. Production authentication defaults are unchanged.
+uses the existing authentication helper with `allow_interactive=False`.
+Expired access tokens are refreshed using the existing refresh token, and updated
+credentials may be saved locally. Refresh failure reports AUTHENTICATION_FAILED.
+Interactive consent remains disabled. Read-only refers to YouTube and learning
+data, not local credential storage. Production authentication defaults and OAuth
+scopes are unchanged.
 
 Only `channels.list(part="id", mine=True)` is called. Exactly one channel is required;
 empty, multiple, paginated or malformed responses fail closed. Results are MATCH,
