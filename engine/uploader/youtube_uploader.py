@@ -79,12 +79,21 @@ def complete_resumable_upload(request):
     return response
 
 
-def get_authenticated_service(*, allow_interactive=False):
+def get_authenticated_service(*, allow_interactive=False, read_only=False):
     creds = None
 
     if os.path.isfile(YOUTUBE_TOKEN_FILE):
         with open(YOUTUBE_TOKEN_FILE, "rb") as token:
             creds = pickle.load(token)
+
+    if read_only:
+        if allow_interactive or not creds or not creds.valid:
+            raise RuntimeError("Read-only YouTube authentication requires an already-valid token")
+        # Prevent the HTTP client from refreshing credentials during a later request.
+        def refuse_refresh(*args, **kwargs):
+            raise RuntimeError("Credential refresh is disabled for read-only preflight")
+        creds.refresh = refuse_refresh
+        return build("youtube", "v3", credentials=creds)
 
     scope_upgrade = allow_interactive and creds and not creds.has_scopes(SCOPES)
     if not creds or not creds.valid or (allow_interactive and not creds.refresh_token) or scope_upgrade:

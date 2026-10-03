@@ -167,4 +167,120 @@ class MetricCollectorTests(unittest.TestCase):
             YouTubeStatisticsProvider(service).fetch(VIDEO)
 
 
+
+class AuthenticatedChannelPreflightTests(unittest.TestCase):
+    def setUp(self):
+        self.profile = Repository().profile
+        self.service = Mock()
+        self.service.channels.return_value.list.return_value.execute.return_value = {"items": [{"id": "platform-channel"}]}
+        self.factory = Mock(return_value=self.service)
+
+    def preflight(self):
+        from engine.learning.metric_collector import authenticated_channel_preflight
+        before = self.profile.model_dump()
+        result = authenticated_channel_preflight(self.profile, service_factory=self.factory)
+        self.assertEqual(self.profile.model_dump(), before)
+        self.service.videos.assert_not_called()
+        return result
+
+    def test_missing_mapping_requires_human_confirmation(self):
+        self.profile.youtube_channel_id = None
+        result = self.preflight()
+        self.assertEqual(result["status"], "MAPPING_REQUIRED")
+        self.assertFalse(result["collection_authorized"])
+        self.assertEqual(result["authenticated_channel_id"], "platform-channel")
+        self.assertIsNone(self.profile.youtube_channel_id)
+
+    def test_match_uses_mine_lookup_and_readonly_auth(self):
+        result = self.preflight()
+        self.assertEqual(result["status"], "MATCH")
+        self.assertTrue(result["collection_authorized"])
+        self.factory.assert_called_once_with(allow_interactive=False, read_only=True)
+        self.service.channels.return_value.list.assert_called_once_with(part="id", mine=True, fields="items/id,nextPageToken")
+        self.service.close.assert_called_once()
+
+    def test_mismatch_does_not_collect(self):
+        self.profile.youtube_channel_id = "another-channel"
+        result = self.preflight()
+        self.assertEqual(result["status"], "MISMATCH")
+        self.assertFalse(result["collection_authorized"])
+
+    def test_authentication_failure_sanitized(self):
+        self.factory.side_effect = RuntimeError("secret-token")
+        result = self.preflight()
+        self.assertEqual(result["status"], "AUTHENTICATION_FAILED")
+        self.assertFalse(result["collection_authorized"])
+        self.assertNotIn("secret-token", str(result))
+        self.service.channels.assert_not_called()
+
+    def test_lookup_failure_sanitized_and_service_closed(self):
+        self.service.channels.return_value.list.return_value.execute.side_effect = RuntimeError("secret-token")
+        result = self.preflight()
+        self.assertEqual(result["status"], "CHANNEL_LOOKUP_FAILED")
+        self.assertFalse(result["collection_authorized"])
+        self.assertNotIn("secret-token", str(result))
+        self.service.close.assert_called_once()
+
+    def test_ambiguous_missing_and_malformed_channels_fail_closed(self):
+        for response in ({}, None, {"items": []}, {"items": [{"id": "a"}, {"id": "b"}]},
+                         {"items": [{}]}, {"items": [{"id": ""}]},
+                         {"items": [{"id": "platform-channel"}], "nextPageToken": "next"}):
+            self.service.channels.return_value.list.return_value.execute.return_value = response
+            result = self.preflight()
+            self.assertEqual(result["status"], "CHANNEL_LOOKUP_FAILED")
+            self.assertFalse(result["collection_authorized"])
+
+    def test_successful_preflight_allows_existing_collector_preview(self):
+        repo = Repository()
+        result = self.preflight()
+        if result["collection_authorized"]:
+            provider = FakeYouTubeProvider({VIDEO: response()})
+            collected = MetricCollector(repo, provider, clock=lambda: NOW).collect("context-a", VIDEO, persist=False)
+            self.assertTrue(collected["success"])
+            self.assertEqual(provider.calls, [VIDEO])
+        else:
+            self.fail("Expected authorized preflight")
+        self.assertEqual(repo.snapshots, {})
+
+    def test_no_database_or_statistics_operations_in_preflight(self):
+        from unittest.mock import patch
+        with patch("psycopg.connect", side_effect=AssertionError("database forbidden")):
+            self.preflight()
+        self.service.channels.return_value.insert.assert_not_called()
+        self.service.channels.return_value.update.assert_not_called()
+        self.service.channels.return_value.delete.assert_not_called()
+
+    def test_existing_auth_readonly_rejects_missing_or_expired_token(self):
+        from unittest.mock import patch, mock_open
+        from engine.uploader import youtube_uploader as auth
+        for exists, valid in ((False, False), (True, False)):
+            credentials = Mock(valid=valid, expired=True, refresh_token="not-printed")
+            with patch.object(auth.os.path, "isfile", return_value=exists), \
+                 patch("builtins.open", mock_open()) as opened, \
+                 patch.object(auth.pickle, "load", return_value=credentials), \
+                 patch.object(auth, "build") as build, patch.object(auth.pickle, "dump") as dump:
+                with self.assertRaises(RuntimeError):
+                    auth.get_authenticated_service(read_only=True)
+                credentials.refresh.assert_not_called()
+                build.assert_not_called()
+                dump.assert_not_called()
+                self.assertTrue(all(call.args[1] == "rb" for call in opened.call_args_list))
+
+    def test_existing_auth_readonly_blocks_http_refresh_and_token_writes(self):
+        from unittest.mock import patch, mock_open
+        from engine.uploader import youtube_uploader as auth
+        credentials = Mock(valid=True)
+        with patch.object(auth.os.path, "isfile", return_value=True), \
+             patch("builtins.open", mock_open()) as opened, \
+             patch.object(auth.pickle, "load", return_value=credentials), \
+             patch.object(auth.pickle, "dump") as dump, \
+             patch.object(auth, "build", return_value=self.service) as build:
+            self.assertIs(auth.get_authenticated_service(read_only=True), self.service)
+            with self.assertRaises(RuntimeError):
+                credentials.refresh(Mock())
+            dump.assert_not_called()
+            opened.assert_called_once_with(auth.YOUTUBE_TOKEN_FILE, "rb")
+            build.assert_called_once_with("youtube", "v3", credentials=credentials)
+
+
 if __name__ == "__main__":unittest.main()

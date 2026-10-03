@@ -23,6 +23,54 @@ def video_id(value):
     return value
 
 
+
+def authenticated_channel_preflight(profile, *, service_factory=None):
+    """Inspect an existing profile and channels.list(mine=True); never persist.
+
+    Missing/invalid profiles are caller errors. Authentication and lookup failures
+    return fixed codes, without exception text or credentials. Caller may collect
+    only when collection_authorized is true; this function never collects metrics.
+    """
+    from engine.learning.schema import ChannelProfile
+    if not isinstance(profile, ChannelProfile):
+        raise ValueError("A learning ChannelProfile is required")
+    result = {"status": "AUTHENTICATION_FAILED", "collection_authorized": False,
+              "authenticated_channel_id": None, "stored_channel_id": profile.youtube_channel_id}
+    service = None
+    try:
+        if service_factory is None:
+            from engine.uploader.youtube_uploader import get_authenticated_service
+            service_factory = get_authenticated_service
+        service = service_factory(allow_interactive=False, read_only=True)
+    except Exception:
+        return result
+    try:
+        response = service.channels().list(part="id", mine=True, fields="items/id,nextPageToken").execute()
+        items = response.get("items") if isinstance(response, dict) else None
+        if (not isinstance(items, list) or len(items) != 1 or response.get("nextPageToken")
+                or not isinstance(items[0], dict) or not isinstance(items[0].get("id"), str)
+                or not items[0]["id"].strip()):
+            result["status"] = "CHANNEL_LOOKUP_FAILED"
+            return result
+        discovered = items[0]["id"]
+        result["authenticated_channel_id"] = discovered
+        if not profile.youtube_channel_id:
+            result["status"] = "MAPPING_REQUIRED"
+        elif discovered != profile.youtube_channel_id:
+            result["status"] = "MISMATCH"
+        else:
+            result.update(status="MATCH", collection_authorized=True)
+    except Exception:
+        result["status"] = "CHANNEL_LOOKUP_FAILED"
+    finally:
+        if service is not None:
+            try:
+                service.close()
+            except Exception:
+                pass
+    return result
+
+
 class YouTubeStatisticsProvider:
     """Borrow the existing authenticated YouTube service. Only videos.list is used."""
     def __init__(self, service):

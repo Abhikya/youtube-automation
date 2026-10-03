@@ -49,7 +49,8 @@ No collector invocation or snapshot persistence is installed in production.
 
 ## Permissions
 
-Production currently declares youtube.upload. It is not automatically changed.
+Production currently declares https://www.googleapis.com/auth/youtube.force-ssl.
+This preflight reuses that scope without broadening permissions.
 If videos.list rejects existing authorization, read access may require separately approved
 OAuth consent with https://www.googleapis.com/auth/youtube.readonly; do not regenerate
 or replace production credentials automatically.
@@ -76,3 +77,24 @@ never opens the database, uploads or notifies. It requires an already-valid loca
 and refuses expired/missing credentials, avoiding authentication refresh/token replacement.
 No interactive authorization, scope changes or secret output. It reports channel ID,
 counters and current observation time for manual verification, not a persisted snapshot.
+
+## Authenticated-channel read-only preflight (Phase 2.6)
+
+`authenticated_channel_preflight(profile)` accepts an existing ChannelProfile and
+uses the existing authentication helper with `allow_interactive=False, read_only=True`.
+It requires an already-valid local token. Missing/expired credentials are rejected;
+interactive consent, token refresh (including HTTP-client refresh) and token writes
+are disabled for this invocation. Production authentication defaults are unchanged.
+
+Only `channels.list(part="id", mine=True)` is called. Exactly one channel is required;
+empty, multiple, paginated or malformed responses fail closed. Results are MATCH,
+MISMATCH, MAPPING_REQUIRED, AUTHENTICATION_FAILED or CHANNEL_LOOKUP_FAILED. Only MATCH
+sets `collection_authorized=True`. Authentication/lookup failure takes precedence
+when the authenticated channel cannot be established.
+
+A missing mapping reports the discovered channel ID for human review but never
+assigns it. This function performs no database operations, statistics collection,
+uploads or profile mutation. Obtain the channel-scoped profile through existing
+repository reads; callers must gate subsequent collector calls on the result.
+Existing collector behavior remains unchanged; it does not invoke this preflight
+automatically. No live preflight or collection runs at module import.
