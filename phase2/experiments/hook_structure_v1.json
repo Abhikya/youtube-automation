@@ -1,0 +1,606 @@
+{
+  "experiment_name": "hook_structure",
+  "experiment_version": "v1",
+  "assignment_seed": 4765339750973678418,
+  "assigned_at": "2026-10-05T19:18:37.242657+00:00",
+  "assignment_locked": true,
+  "scope": "local_script_candidates_only",
+  "candidates": [
+    {
+      "pair_id": "pair_01",
+      "category": "cosmic_signal",
+      "selected_idea": "The Wow! Signal: the origin of the radio signal detected in 1977 remains unresolved.",
+      "variant": "BASELINE",
+      "planned_slot": "10:00",
+      "planned_date": null,
+      "script_hash": "93fbab69acd60ed6a3007c16bc9149066a3ab28c84e425c5fa16e26530802b37",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In 1977, a mysterious radio signal blasted through space, lasting 72 seconds—then vanished without a trace. Known as the Wow! Signal, it came from a distant star cluster, sparking hope for alien contact. Scientists confirmed it wasn’t Earth-made, but its true origin remains unknown. Some suggest it was a comet or a satellite, others propose extraterrestrial messages—pure speculation. To this day, the Wow! Signal remains one of astronomy’s greatest unsolved mysteries, teasing us with a cosmic whisper we still can’t explain.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Review strong claims that a star-cluster source and non-Earth origin were confirmed; existing channel has Wow! stories, so repeat-topic risk remains.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "In 1977, a mysterious radio signal blasted through space, lasting 72 seconds—then vanished without a trace.",
+      "word_count": 81,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null
+    },
+    {
+      "pair_id": "pair_01",
+      "category": "cosmic_signal",
+      "selected_idea": "The Lorimer burst: the origin of the fast radio burst first reported in 2007 and uncertainties about its source.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "14:00",
+      "planned_date": null,
+      "script_hash": "37c04abb6080c9a1dd14ad0d838fdefc30c858aca4ceaeb6df347b9173b41dcd",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "Astronomers caught a lightning-fast flash of radio waves from deep space—lasting just milliseconds—in 2007. Known as the Lorimer burst, this was the first-ever fast radio burst detected. We know it came from billions of light-years away, but what caused it? Some scientists suggest massive neutron stars colliding, others hint at unknown cosmic phenomena. But the truth remains a mystery. No one has pinpointed the exact source, leaving the Lorimer burst as one of space’s most baffling puzzles. What secrets does it still hide?",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Check discovery/report year versus actual signal observation date, distance certainty and proposed source claims.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "source_baseline_script": "In 2007, astronomers caught a lightning-fast flash of radio waves from deep space—lasting just milliseconds. Known as the Lorimer burst, this was the first-ever fast radio burst detected. We know it came from billions of light-years away, but what caused it? Some scientists suggest massive neutron stars colliding, others hint at unknown cosmic phenomena. But the truth remains a mystery. No one has pinpointed the exact source, leaving the Lorimer burst as one of space’s most baffling puzzles. What secrets does it still hide?",
+      "first_sentence": "Astronomers caught a lightning-fast flash of radio waves from deep space—lasting just milliseconds—in 2007.",
+      "word_count": 83,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "2007": 1
+        },
+        "numeric_facts_experimental": {
+          "2007": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "2007": 1,
+          "astronomers": 1,
+          "caught": 1,
+          "a": 1,
+          "lightning": 1,
+          "fast": 1,
+          "flash": 1,
+          "of": 1,
+          "radio": 1,
+          "waves": 1,
+          "from": 1,
+          "deep": 1,
+          "space": 1,
+          "lasting": 1,
+          "just": 1,
+          "milliseconds": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "2007"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "2007"
+            ]
+          }
+        ],
+        "word_count_difference": -1,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true
+    },
+    {
+      "pair_id": "pair_02",
+      "category": "cosmic_signal",
+      "selected_idea": "Tabby’s Star: unusual brightness dips and proposed explanations; do not present alien speculation as evidence.",
+      "variant": "BASELINE",
+      "planned_slot": "14:00",
+      "planned_date": null,
+      "script_hash": "214d04d1bad92affc51e7f3487afbc162bfe715a45c83bebfb2da473e70ff98f",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "Imagine a star that flickers like a cosmic puzzle—Tabby’s Star. Unlike any normal star, its brightness mysteriously dims by up to 22%, then recovers unpredictably. Scientists have ruled out planets or dust clouds alone explaining this strange behavior. Some suggest swarms of comets or uneven dust clouds, but these ideas can’t fully unravel the mystery. What causes these sudden, irregular dips? To this day, astronomers watch and wonder, with no definitive answer—just unsolved cosmic clues.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Opening already curiosity-first: low contrast with experimental arm. Check claims about dust being ruled out.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "Imagine a star that flickers like a cosmic puzzle—Tabby’s Star.",
+      "word_count": 75,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null
+    },
+    {
+      "pair_id": "pair_02",
+      "category": "cosmic_signal",
+      "selected_idea": "HD 139139: unusual dimming events reported in 2019 and the uncertainty surrounding their explanation.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "10:00",
+      "planned_date": null,
+      "script_hash": "4a6ed7c33ffcac2d798643e1bd165c82ad3558c24bebdf8ae3c667e15d2e549f",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "Astronomers spotted something strange around star HD 139139—unexplained dimming events that appeared totally random—in 2019. Unlike our Sun’s predictable patterns, this star flickered mysteriously, with no clear cause. Scientists confirmed it’s real but can’t explain why. Some suggest swarms of comets, others propose alien megastructures—but these are just theories, not facts. To this day, HD 139139’s odd flickers remain an unsolved cosmic mystery, teasing astronomers: what exactly is hiding in the darkness?",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Awkward final date placement; verify scientific status and unsupported alien-megastructure attribution.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "source_baseline_script": "In 2019, astronomers spotted something strange around star HD 139139—unexplained dimming events that appeared totally random. Unlike our Sun’s predictable patterns, this star flickered mysteriously, with no clear cause. Scientists confirmed it’s real but can’t explain why. Some suggest swarms of comets, others propose alien megastructures—but these are just theories, not facts. To this day, HD 139139’s odd flickers remain an unsolved cosmic mystery, teasing astronomers: what exactly is hiding in the darkness?",
+      "first_sentence": "Astronomers spotted something strange around star HD 139139—unexplained dimming events that appeared totally random—in 2019.",
+      "word_count": 72,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "2019": 1,
+          "139139": 1
+        },
+        "numeric_facts_experimental": {
+          "139139": 1,
+          "2019": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "2019": 1,
+          "astronomers": 1,
+          "spotted": 1,
+          "something": 1,
+          "strange": 1,
+          "around": 1,
+          "star": 1,
+          "hd": 1,
+          "139139": 1,
+          "unexplained": 1,
+          "dimming": 1,
+          "events": 1,
+          "that": 1,
+          "appeared": 1,
+          "totally": 1,
+          "random": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "2019"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "2019"
+            ]
+          }
+        ],
+        "word_count_difference": -1,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true
+    },
+    {
+      "pair_id": "pair_03",
+      "category": "maritime",
+      "selected_idea": "MV Joyita: the vessel found abandoned in 1955 and the unresolved fate of its occupants.",
+      "variant": "BASELINE",
+      "planned_slot": "14:00",
+      "planned_date": null,
+      "script_hash": "82d2ce58a89065d412352c1dec42e4e0880eac76c38788010e612ca7b1cd208a",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In 1955, the MV Joyita was found drifting in the Pacific—completely abandoned. The radio was dead, lifeboats missing, and some crew members’ personal items left behind. The ship was partially flooded but still seaworthy. No one saw what happened to the 25 people onboard. Some speculate a rogue wave or pirates, while others suggest supernatural causes—though none are proven. The mystery remains: what truly happened to the Joyita’s crew? To this day, their fate is unknown.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Verify radio condition, seaworthiness and 25-person wording; supernatural framing needs source review.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "In 1955, the MV Joyita was found drifting in the Pacific—completely abandoned.",
+      "word_count": 76,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null
+    },
+    {
+      "pair_id": "pair_03",
+      "category": "maritime",
+      "selected_idea": "Mary Celeste: the abandoned merchant vessel discovered in 1872 and the unresolved fate of its occupants.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "19:00",
+      "planned_date": null,
+      "script_hash": "93ab80790a68640bab014bf711a711ae912911e561785227241cdc6b77020a3b",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "The merchant ship Mary Celeste was found drifting alone in the Atlantic—its cargo intact, but no crew in sight, in 1872. The lifeboat was missing, suggesting they abandoned ship, but why? Some think a sudden storm forced them overboard. Others speculate about pirate attacks or sea monsters—but these are just theories, never proven. To this day, the fate of the crew remains a mystery. What really happened aboard the Mary Celeste? That question haunts historians and explorers alike.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Date at sentence end is awkward; sea-monster speculation and abandoned-ship explanation require factual review.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "The merchant ship Mary Celeste was found drifting alone in the Atlantic—its cargo intact, but no crew in sight, in 1872.",
+      "word_count": 78,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": "In 1872, the merchant ship Mary Celeste was found drifting alone in the Atlantic—its cargo intact, but no crew in sight. The lifeboat was missing, suggesting they abandoned ship, but why? Some think a sudden storm forced them overboard. Others speculate about pirate attacks or sea monsters—but these are just theories, never proven. To this day, the fate of the crew remains a mystery. What really happened aboard the Mary Celeste? That question haunts historians and explorers alike.",
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1872": 1
+        },
+        "numeric_facts_experimental": {
+          "1872": 1
+        },
+        "preserved_token_counts": {
+          "in": 3,
+          "1872": 1,
+          "the": 2,
+          "merchant": 1,
+          "ship": 1,
+          "mary": 1,
+          "celeste": 1,
+          "was": 1,
+          "found": 1,
+          "drifting": 1,
+          "alone": 1,
+          "atlantic": 1,
+          "its": 1,
+          "cargo": 1,
+          "intact": 1,
+          "but": 1,
+          "no": 1,
+          "crew": 1,
+          "sight": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "1872"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "1872"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true
+    },
+    {
+      "pair_id": "pair_04",
+      "category": "maritime",
+      "selected_idea": "USS Cyclops: the naval vessel lost in 1918; distinguish documented disappearance from speculative explanations.",
+      "variant": "BASELINE",
+      "planned_slot": "19:00",
+      "planned_date": null,
+      "script_hash": "04e2ab1f19c476f794f4f6461d55df8e136b4948a004fcb62228923621d2657d",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In 1918, the USS Cyclops vanished without a trace in the Bermuda Triangle, carrying 309 crew and cargo. The largest loss of life in US Navy history outside of combat. Official records show no distress signals or wreckage ever found. Speculation ranges from storms, structural failure, to enemy attacks — but none confirmed. Folklore even suggests mysterious forces at play, yet these remain unproven theories. To this day, the Cyclops’ fate remains one of the greatest naval mysteries, lost to the vast ocean and unanswered questions.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Check whether 309 describes all aboard rather than crew; sentence fragment and Bermuda Triangle framing need review. Existing Cyclops topic creates repeat risk.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "In 1918, the USS Cyclops vanished without a trace in the Bermuda Triangle, carrying 309 crew and cargo.",
+      "word_count": 86,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null
+    },
+    {
+      "pair_id": "pair_04",
+      "category": "maritime",
+      "selected_idea": "SS Waratah: the passenger steamer lost in 1909; distinguish documented disappearance from speculative explanations.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "14:00",
+      "planned_date": null,
+      "script_hash": "a1ccac0b5afdb74de00ea303a5718515460479f033decad29d959a271b8712b7",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "The passenger steamer SS Waratah vanished between South Africa and Australia in 1909—no wreckage or survivors ever found. We know it left Durban loaded with people and cargo, then simply disappeared without a trace. Official records confirm her last sighting near the South African coast, but what happened next remains a mystery. Some speculate she sank in a cyclone; others suggest structural failure or even piracy—but none are proven. To this day, the fate of the Waratah is an unsolved maritime mystery.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Verify final voyage route: South Africa/Australia wording may misstate the disappearance location; piracy claim needs support.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "The passenger steamer SS Waratah vanished between South Africa and Australia in 1909—no wreckage or survivors ever found.",
+      "word_count": 82,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": "In 1909, the passenger steamer SS Waratah vanished between South Africa and Australia—no wreckage or survivors ever found. We know it left Durban loaded with people and cargo, then simply disappeared without a trace. Official records confirm her last sighting near the South African coast, but what happened next remains a mystery. Some speculate she sank in a cyclone; others suggest structural failure or even piracy—but none are proven. To this day, the fate of the Waratah is an unsolved maritime mystery.",
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1909": 1
+        },
+        "numeric_facts_experimental": {
+          "1909": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "1909": 1,
+          "the": 1,
+          "passenger": 1,
+          "steamer": 1,
+          "ss": 1,
+          "waratah": 1,
+          "vanished": 1,
+          "between": 1,
+          "south": 1,
+          "africa": 1,
+          "and": 1,
+          "australia": 1,
+          "no": 1,
+          "wreckage": 1,
+          "or": 1,
+          "survivors": 1,
+          "ever": 1,
+          "found": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "1909"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "1909"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true
+    },
+    {
+      "pair_id": "pair_05",
+      "category": "missing_person",
+      "selected_idea": "The Springfield Three: the unresolved disappearance of three women in 1992; avoid invented suspects or evidence.",
+      "variant": "BASELINE",
+      "planned_slot": "19:00",
+      "planned_date": null,
+      "script_hash": "7ac8d716cdfadfffae0f3b25bb6698cd02e82dccc48e39c72594160619c0860e",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "On the night of June 7, 1992, three women—Sherrill, Suzanne, and Stacy—vanished from a quiet Springfield home. No signs of forced entry. No confirmed witnesses. Police found no trace, and despite decades of searching, the case remains unsolved. Speculation swirls—some suggest foul play, others think they left voluntarily—but no evidence supports these ideas. The truth behind their disappearance remains a mystery, haunting the community and leaving questions that still demand answers.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Verify time-of-day and absolute no-evidence/no-witness statements; handle victim stories sensitively.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "On the night of June 7, 1992, three women—Sherrill, Suzanne, and Stacy—vanished from a quiet Springfield home.",
+      "word_count": 71,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null
+    },
+    {
+      "pair_id": "pair_05",
+      "category": "missing_person",
+      "selected_idea": "The Beaumont children: the unresolved disappearance from Glenelg Beach in 1966; avoid invented suspects or evidence.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "10:00",
+      "planned_date": null,
+      "script_hash": "6185cdf8448734bbbcc1083b229788b6a3bea023da53af2ff2535837ff08db00",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "Three siblings vanished without a trace from Glenelg Beach, Australia, in 1966. Jane, Arnna, and Grant Beaumont went to the beach in broad daylight—and were never seen again. Despite extensive searches and investigations, no confirmed clues have emerged. Their disappearance remains one of Australia’s most haunting mysteries. Over the years, theories have surfaced—none proven—including possible stranger abduction. Yet, no suspects were ever charged, and the children’s fate is still unknown. What really happened that summer day? The Beaumont children’s story remains a chilling unanswered question.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Check source factual claims, opening order and victim-sensitive wording; existing Beaumont videos create repeat risk.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "source_baseline_script": "In 1966, three siblings vanished without a trace from Glenelg Beach, Australia. Jane, Arnna, and Grant Beaumont went to the beach in broad daylight—and were never seen again. Despite extensive searches and investigations, no confirmed clues have emerged. Their disappearance remains one of Australia’s most haunting mysteries. Over the years, theories have surfaced—none proven—including possible stranger abduction. Yet, no suspects were ever charged, and the children’s fate is still unknown. What really happened that summer day? The Beaumont children’s story remains a chilling unanswered question.",
+      "first_sentence": "Three siblings vanished without a trace from Glenelg Beach, Australia, in 1966.",
+      "word_count": 85,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1966": 1
+        },
+        "numeric_facts_experimental": {
+          "1966": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "1966": 1,
+          "three": 1,
+          "siblings": 1,
+          "vanished": 1,
+          "without": 1,
+          "a": 1,
+          "trace": 1,
+          "from": 1,
+          "glenelg": 1,
+          "beach": 1,
+          "australia": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "1966"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "1966"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true
+    },
+    {
+      "pair_id": "pair_06",
+      "category": "missing_person",
+      "selected_idea": "The disappearance of Paula Jean Welden in Vermont in 1946; distinguish documented information from unproven theories.",
+      "variant": "BASELINE",
+      "planned_slot": "10:00",
+      "planned_date": null,
+      "script_hash": "90ddd5eb10f1f58289edc2ac4ffae44b71fece16a67d4ad01721731860b4c426",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In 1946, college student Paula Jean Welden vanished while hiking Vermont’s Long Trail—and was never seen again. Known fact: she left her dorm without telling anyone and disappeared on a remote stretch of trail. Despite extensive searches, no trace was found. Speculation suggests she might have fallen, been attacked, or even chosen to start a new life—yet none of these theories have proof. To this day, Paula’s disappearance remains one of Vermont’s oldest unsolved mysteries, leaving more questions than answers.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Verify dorm-departure claim; do not label unsupported detail as known fact.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "In 1946, college student Paula Jean Welden vanished while hiking Vermont’s Long Trail—and was never seen again.",
+      "word_count": 80,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null
+    },
+    {
+      "pair_id": "pair_06",
+      "category": "missing_person",
+      "selected_idea": "The Flannan Isles lighthouse keepers: the unexplained disappearance in 1900; do not invent log entries or supernatural evidence.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "19:00",
+      "planned_date": null,
+      "script_hash": "ddb1c61de0ed3105b843321c5dfd0cf76d6655712016acf0a5cf21b50a1729c0",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "Three lighthouse keepers vanished without a trace from the remote Flannan Isles, Scotland, in December 1900. When relief crew arrived, the lighthouse was operational, but the men were gone—no signs of struggle or explanation. Known fact: their disappearance remains unsolved. Some suggest a freak wave or accident, but no evidence confirms this. Others whisper folklore about curses or sea spirits—but that’s pure speculation. To this day, the fate of those men is a haunting mystery lost in the wild Atlantic winds.",
+      "review_status": "NEEDS_FIX",
+      "review_notes": [
+        "Verify lighthouse operational-state claim; unsupported folklore references and existing Flannan topic require review.",
+        "Editorial review complete; human factual approval remains required."
+      ],
+      "first_sentence": "Three lighthouse keepers vanished without a trace from the remote Flannan Isles, Scotland, in December 1900.",
+      "word_count": 81,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": "In December 1900, three lighthouse keepers vanished without a trace from the remote Flannan Isles, Scotland. When relief crew arrived, the lighthouse was operational, but the men were gone—no signs of struggle or explanation. Known fact: their disappearance remains unsolved. Some suggest a freak wave or accident, but no evidence confirms this. Others whisper folklore about curses or sea spirits—but that’s pure speculation. To this day, the fate of those men is a haunting mystery lost in the wild Atlantic winds.",
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1900": 1
+        },
+        "numeric_facts_experimental": {
+          "1900": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "december": 1,
+          "1900": 1,
+          "three": 1,
+          "lighthouse": 1,
+          "keepers": 1,
+          "vanished": 1,
+          "without": 1,
+          "a": 1,
+          "trace": 1,
+          "from": 1,
+          "the": 1,
+          "remote": 1,
+          "flannan": 1,
+          "isles": 1,
+          "scotland": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "December",
+              "1900"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "December",
+              "1900"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true
+    }
+  ]
+}

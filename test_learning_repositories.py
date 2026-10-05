@@ -67,7 +67,7 @@ class RepositoryOfflineTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_all_create_methods_use_existing_mapping_and_return_models(self):
-        for model, method in ((ChannelProfile, "create_profile"), (GenerationRecord, "create_generation"), (PublishedVideo, "create_published_video"), (MetricSnapshot, "insert_snapshot"), (ContentFeatures, "create_features"), (LearningContext, "create_context")):
+        for model, method in ((ChannelProfile, "create_profile"), (GenerationRecord, "create_generation"), (PublishedVideo, "create_published_video"), (MetricSnapshot, "insert_snapshot"), (ContentFeatures, "create_features")):
             with self.subTest(model=model.__name__):
                 record = records()[model]
                 self.cursor.execute.return_value.fetchone.return_value = db_row(record)
@@ -192,7 +192,7 @@ class RepositoryPostgreSQLTests(unittest.TestCase):
         self.data_b = records("channel-b")
 
     def seed(self, repo, data):
-        for model, method in ((ChannelProfile,"create_profile"), (LearningContext,"create_context"), (GenerationRecord,"create_generation"), (PublishedVideo,"create_published_video"), (MetricSnapshot,"insert_snapshot"), (ContentFeatures,"create_features")):
+        for model, method in ((ChannelProfile,"create_profile"), (GenerationRecord,"create_generation"), (PublishedVideo,"create_published_video"), (MetricSnapshot,"insert_snapshot"), (ContentFeatures,"create_features"), (LearningContext,"create_context")):
             self.assertEqual(getattr(repo, method)(data[model]), data[model])
 
     def test_empty_database(self):

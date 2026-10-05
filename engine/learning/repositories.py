@@ -14,7 +14,7 @@ from pydantic import AwareDatetime, TypeAdapter
 from engine.learning.mapping import TABLES, to_columns, from_row
 from engine.learning.schema import (
     Identifier, ChannelProfile, GenerationRecord, PublishedVideo,
-    MetricSnapshot, ContentFeatures, LearningContext,
+    MetricSnapshot, ContentFeatures, LearningContext, LearningObservation,
 )
 
 _ID = TypeAdapter(Identifier)
@@ -58,10 +58,14 @@ class LearningRepository:
         # Derive projection from the schema, including flattened window fields.
         result = []
         for field in model.model_fields:
+            if model is LearningContext and field in {"observations", "examples"}:
+                continue
             if field in {"observation_window", "analysis_period"}:
                 result.extend(f"{field}_{part}" for part in ("kind", "start_at", "end_at"))
             else:
                 result.append(field)
+        if model is LearningContext:
+            result.extend(("examples_present", "sealed"))
         return sql.SQL(", ").join(map(sql.Identifier, result))
 
     def _write(self, model, record, *, upsert=False, identity=None):
@@ -132,7 +136,8 @@ class LearningRepository:
         with self.transaction():
             with self._connection.cursor(row_factory=dict_row) as cursor:
                 rows = cursor.execute(query, tuple(params)).fetchall()
-            return [from_row(model, row, channel_context_id=self._channel) for row in rows]
+            return [self._read_context(row) if model is LearningContext else
+                    from_row(model, row, channel_context_id=self._channel) for row in rows]
 
     def _get(self, model, column, value):
         rows = self._select(model, filters=((column, value),), limit=1)
@@ -210,9 +215,92 @@ class LearningRepository:
             filters.append(("linked_video_id", published_video_id))
         return self._select(ContentFeatures, filters=filters, order=(("created_at", "DESC"), ("feature_record_id", "ASC")), limit=limit, offset=offset)
 
+    def validate_context_evidence(self, record):
+        """Resolve typed references in this repository's channel; never guess targets."""
+        if type(record) is not LearningContext:
+            raise TypeError("Expected LearningContext.")
+        record = LearningContext.model_validate(record.model_dump()).require_channel(self._channel)
+        if not record.observations or record.sample_count < 1:
+            raise ValueError("Empty context rejected.")
+        methods = {"channel_profile": lambda key: self.get_profile() if key == self._channel else None,
+                   "generation": self.get_generation, "published_video": self.get_published_video,
+                   "metric_snapshot": self.get_snapshot, "content_features": self.get_features,
+                   "learning_context": self.get_context}
+        seen = set()
+        for ref in [r for o in record.observations for r in o.evidence] + (record.examples or []):
+            key = (ref.record_type, ref.record_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            target = methods[ref.record_type](ref.record_id)
+            if target is None:
+                raise RepositoryConflict("Missing same-channel context evidence.")
+            target.require_channel(self._channel)
+        return record
+
     def create_context(self, record):
-        """Insert-only: each immutable context build requires a distinct ID."""
-        return self._write(LearningContext, record)
+        """Atomically insert header, ordered children/evidence, then seal forever."""
+        if type(record) is not LearningContext:
+            raise TypeError("Expected LearningContext.")
+        record = LearningContext.model_validate(record.model_dump()).require_channel(self._channel)
+        with self.transaction():
+            record = self.validate_context_evidence(record)
+            columns = to_columns(record)
+            columns.pop("observations")
+            columns.pop("examples")
+            columns["examples_present"] = record.examples is not None
+            query = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+                self._table(LearningContext), sql.SQL(", ").join(map(sql.Identifier, columns)),
+                sql.SQL(", ").join(sql.Placeholder() for _ in columns))
+            with self._connection.cursor(row_factory=dict_row) as cursor:
+                cursor.execute(query, tuple(columns.values()))
+                for position, observation in enumerate(record.observations):
+                    cursor.execute(sql.SQL("INSERT INTO {} (channel_context_id, context_id, observation_position, notes, sample_count, uncertainty_notes) VALUES (%s,%s,%s,%s,%s,%s)").format(sql.Identifier(self._schema,"learning_observations")),
+                        (self._channel,record.context_id,position,observation.notes,observation.sample_count,observation.uncertainty_notes))
+                    for evidence_position, ref in enumerate(observation.evidence):
+                        self._insert_context_evidence(cursor,record.context_id,"observation",position,evidence_position,ref)
+                for position, ref in enumerate(record.examples or []):
+                    self._insert_context_evidence(cursor,record.context_id,"example",None,position,ref)
+                cursor.execute(sql.SQL("UPDATE {} SET sealed=TRUE WHERE channel_context_id=%s AND context_id=%s AND NOT sealed").format(self._table(LearningContext)),(self._channel,record.context_id))
+            return record
+
+    def _insert_context_evidence(self,cursor,context_id,role,observation_position,position,ref):
+        cursor.execute(sql.SQL("INSERT INTO {} (channel_context_id,context_id,role,observation_position,evidence_position,record_type,record_id) VALUES (%s,%s,%s,%s,%s,%s,%s)").format(sql.Identifier(self._schema,"learning_evidence")),
+            (self._channel,context_id,role,observation_position,position,ref.record_type,ref.record_id))
+
+    def _read_context(self,row):
+        """Reconstruct ordered model children; reject gaps and invalid roles."""
+        values = dict(row)
+        present = values.pop("examples_present")
+        if not values.pop("sealed") or values["channel_context_id"] != self._channel:
+            raise RepositoryError("Unsealed or wrong-channel context.")
+        with self._connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(sql.SQL("SELECT channel_context_id,context_id,observation_position,notes,sample_count,uncertainty_notes FROM {} WHERE channel_context_id=%s AND context_id=%s ORDER BY observation_position").format(sql.Identifier(self._schema,"learning_observations")),(self._channel,values["context_id"]))
+            observations = cursor.fetchall()
+            cursor.execute(sql.SQL("SELECT channel_context_id,context_id,role,observation_position,evidence_position,record_type,record_id FROM {} WHERE channel_context_id=%s AND context_id=%s ORDER BY role,observation_position NULLS FIRST,evidence_position").format(sql.Identifier(self._schema,"learning_evidence")),(self._channel,values["context_id"]))
+            evidence = cursor.fetchall()
+        grouped = {}
+        for ref in evidence:
+            if ref["channel_context_id"] != self._channel or ref["context_id"] != values["context_id"]:
+                raise RepositoryError("Invalid context evidence ownership.")
+            key = (ref["role"],ref["observation_position"])
+            if key[0] not in {"observation","example"} or (key[0]=="example" and key[1] is not None):
+                raise RepositoryError("Invalid context evidence role.")
+            items = grouped.setdefault(key,[])
+            if ref["evidence_position"] != len(items):
+                raise RepositoryError("Invalid context evidence ordering.")
+            items.append({name:ref[name] for name in ("channel_context_id","record_type","record_id")})
+        values["observations"] = []
+        for position, observation in enumerate(observations):
+            if observation["observation_position"] != position or observation["channel_context_id"] != self._channel or observation["context_id"] != values["context_id"]:
+                raise RepositoryError("Invalid context observation ordering.")
+            values["observations"].append(LearningObservation(
+                **{name:observation[name] for name in ("notes","sample_count","uncertainty_notes")},
+                evidence=grouped.pop(("observation",position),[])).model_dump())
+        values["examples"] = grouped.pop(("example",None),[]) if present else None
+        if grouped or not values["observations"]:
+            raise RepositoryError("Invalid context child structure.")
+        return from_row(LearningContext,values,channel_context_id=self._channel)
 
     def get_context(self, context_id):
         return self._get(LearningContext, "context_id", context_id)

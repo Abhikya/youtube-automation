@@ -1,0 +1,279 @@
+{
+  "scope": "local_script_comparison_only",
+  "provenance": "live_script_generator_output",
+  "uploaded": false,
+  "rendered": false,
+  "pairs": [
+    {
+      "selected_idea": "The Wow! Signal: Who sent the unexplained radio transmission detected in 1977?",
+      "remainder_identical": true,
+      "variants": [
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "baseline",
+          "selected_idea": "The Wow! Signal: Who sent the unexplained radio transmission detected in 1977?",
+          "script": "In 1977, a strange radio signal blasted through space, lasting 72 seconds—loud, clear, and unlike anything heard before. Scientists at Ohio State’s Big Ear telescope called it the “Wow! Signal.” But who sent it? We know it came from the Sagittarius constellation, but it never repeated. Some believe it was an alien message—speculation with no proof. Others suggest natural cosmic phenomena. To this day, the origin of the Wow! Signal remains one of astronomy’s greatest unsolved mysteries. Who, or what, was trying to communicate?",
+          "opening": "In 1977, a strange radio signal blasted through space, lasting 72 seconds—loud, clear, and unlike anything heard before.",
+          "word_count": 84,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "05562c3d17ec36d9bc97cd768d68cb7c09876d18a84e79fce8758b555248759b",
+          "created_at": "2026-10-05T18:38:36.994067+00:00"
+        },
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "hook_event_first_v1",
+          "selected_idea": "The Wow! Signal: Who sent the unexplained radio transmission detected in 1977?",
+          "script": "A strange radio signal blasted through space in 1977, lasting 72 seconds—loud, clear, and unlike anything heard before. Scientists at Ohio State’s Big Ear telescope called it the “Wow! Signal.” But who sent it? We know it came from the Sagittarius constellation, but it never repeated. Some believe it was an alien message—speculation with no proof. Others suggest natural cosmic phenomena. To this day, the origin of the Wow! Signal remains one of astronomy’s greatest unsolved mysteries. Who, or what, was trying to communicate?",
+          "opening": "A strange radio signal blasted through space in 1977, lasting 72 seconds—loud, clear, and unlike anything heard before.",
+          "word_count": 84,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "6859ba9130f3a93b6ab9cd628d9b86fd9c1d3b46b9d6efbf5a9f4c4636d65ae2",
+          "created_at": "2026-10-05T18:50:19.131110+00:00"
+        }
+      ],
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1977": 1,
+          "72": 1
+        },
+        "numeric_facts_experimental": {
+          "1977": 1,
+          "72": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "1977": 1,
+          "a": 1,
+          "strange": 1,
+          "radio": 1,
+          "signal": 1,
+          "blasted": 1,
+          "through": 1,
+          "space": 1,
+          "lasting": 1,
+          "72": 1,
+          "seconds": 1,
+          "loud": 1,
+          "clear": 1,
+          "and": 1,
+          "unlike": 1,
+          "anything": 1,
+          "heard": 1,
+          "before": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "1977"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "1977"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      }
+    },
+    {
+      "selected_idea": "The disappearance of the USS Cyclops: Where did the navy ship go in 1918?",
+      "remainder_identical": true,
+      "variants": [
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "baseline",
+          "selected_idea": "The disappearance of the USS Cyclops: Where did the navy ship go in 1918?",
+          "script": "In March 1918, the USS Cyclops vanished without a trace between Barbados and Baltimore—306 crew, gone. No distress calls, no wreckage found. Officially, the mystery remains unsolved. Some suggest a catastrophic storm sank the ship. Others speculate about enemy sabotage during World War I, though no proof exists. Folklore whispers about a Bermuda Triangle curse, but that’s just stories. What really happened to the USS Cyclops? To this day, we don’t know, and the sea keeps its secrets locked tight.",
+          "opening": "In March 1918, the USS Cyclops vanished without a trace between Barbados and Baltimore—306 crew, gone.",
+          "word_count": 80,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "725cfb33ba45c485eb1c8424d59e1c125903f1fa471400d806eb26e342c3e6b4",
+          "created_at": "2026-10-05T18:38:39.423774+00:00"
+        },
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "hook_event_first_v1",
+          "selected_idea": "The disappearance of the USS Cyclops: Where did the navy ship go in 1918?",
+          "script": "The USS Cyclops vanished without a trace between Barbados and Baltimore in March 1918—306 crew, gone. No distress calls, no wreckage found. Officially, the mystery remains unsolved. Some suggest a catastrophic storm sank the ship. Others speculate about enemy sabotage during World War I, though no proof exists. Folklore whispers about a Bermuda Triangle curse, but that’s just stories. What really happened to the USS Cyclops? To this day, we don’t know, and the sea keeps its secrets locked tight.",
+          "opening": "The USS Cyclops vanished without a trace between Barbados and Baltimore in March 1918—306 crew, gone.",
+          "word_count": 80,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "449a3af2588c8f7df88fc461de1e2f1d64aae5dd1cf9b3efc384e151bb96dad3",
+          "created_at": "2026-10-05T18:50:20.327852+00:00"
+        }
+      ],
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1918": 1,
+          "306": 1
+        },
+        "numeric_facts_experimental": {
+          "1918": 1,
+          "306": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "march": 1,
+          "1918": 1,
+          "the": 1,
+          "uss": 1,
+          "cyclops": 1,
+          "vanished": 1,
+          "without": 1,
+          "a": 1,
+          "trace": 1,
+          "between": 1,
+          "barbados": 1,
+          "and": 1,
+          "baltimore": 1,
+          "306": 1,
+          "crew": 1,
+          "gone": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "March",
+              "1918"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "March",
+              "1918"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "operator_approved_prosody_adjustment": true
+    },
+    {
+      "selected_idea": "The disappearance of the Beaumont children: What happened in 1966 Australia?",
+      "remainder_identical": true,
+      "variants": [
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "baseline",
+          "selected_idea": "The disappearance of the Beaumont children: What happened in 1966 Australia?",
+          "script": "In 1966, three Beaumont children vanished from a quiet Australian beach, sparking one of the country’s most haunting mysteries. Jane, Arnna, and Grant were never seen again after visiting Glenelg Beach. Despite extensive searches and countless leads, their fate remains unknown. Some believe they were kidnapped by a stranger—this is speculation, not confirmed fact. Others suggest they ran away or had an accident—both theories remain unproven. The Beaumont children’s disappearance is a chilling reminder of how a perfect day can end in unanswered questions.",
+          "opening": "In 1966, three Beaumont children vanished from a quiet Australian beach, sparking one of the country’s most haunting mysteries.",
+          "word_count": 84,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "49147fa9989de12c24a1cd378d5f7e0bedf2b160aee827f2d3ef153e79a278bf",
+          "created_at": "2026-10-05T18:38:42.047277+00:00"
+        },
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "hook_event_first_v1",
+          "selected_idea": "The disappearance of the Beaumont children: What happened in 1966 Australia?",
+          "script": "Three Beaumont children vanished from a quiet Australian beach in 1966, sparking one of the country’s most haunting mysteries. Jane, Arnna, and Grant were never seen again after visiting Glenelg Beach. Despite extensive searches and countless leads, their fate remains unknown. Some believe they were kidnapped by a stranger—this is speculation, not confirmed fact. Others suggest they ran away or had an accident—both theories remain unproven. The Beaumont children’s disappearance is a chilling reminder of how a perfect day can end in unanswered questions.",
+          "opening": "Three Beaumont children vanished from a quiet Australian beach in 1966, sparking one of the country’s most haunting mysteries.",
+          "word_count": 84,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "ffbae915682decfe1b5627c23ac65d442a5ce42df75656f9f49943bc0900bc5f",
+          "created_at": "2026-10-05T18:50:21.186510+00:00"
+        }
+      ],
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1966": 1
+        },
+        "numeric_facts_experimental": {
+          "1966": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "1966": 1,
+          "three": 1,
+          "beaumont": 1,
+          "children": 1,
+          "vanished": 1,
+          "from": 1,
+          "a": 1,
+          "quiet": 1,
+          "australian": 1,
+          "beach": 1,
+          "sparking": 1,
+          "one": 1,
+          "of": 1,
+          "the": 1,
+          "country": 1,
+          "s": 1,
+          "most": 1,
+          "haunting": 1,
+          "mysteries": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "1966"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "1966"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      }
+    }
+  ],
+  "revision": "reorder_only_review_v2"
+}

@@ -1,0 +1,104 @@
+{
+  "scope": "local_script_comparison_only",
+  "provenance": "live_script_generator_output",
+  "uploaded": false,
+  "rendered": false,
+  "pairs": [
+    {
+      "selected_idea": "The Wow! Signal: Who sent the unexplained radio transmission detected in 1977?",
+      "remainder_identical": true,
+      "variants": [
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "baseline",
+          "selected_idea": "The Wow! Signal: Who sent the unexplained radio transmission detected in 1977?",
+          "script": "In 1977, a strange radio signal blasted through space, lasting 72 seconds—loud, clear, and unlike anything heard before. Scientists at Ohio State’s Big Ear telescope called it the “Wow! Signal.” But who sent it? We know it came from the Sagittarius constellation, but it never repeated. Some believe it was an alien message—speculation with no proof. Others suggest natural cosmic phenomena. To this day, the origin of the Wow! Signal remains one of astronomy’s greatest unsolved mysteries. Who, or what, was trying to communicate?",
+          "opening": "In 1977, a strange radio signal blasted through space, lasting 72 seconds—loud, clear, and unlike anything heard before.",
+          "word_count": 84,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "05562c3d17ec36d9bc97cd768d68cb7c09876d18a84e79fce8758b555248759b",
+          "created_at": "2026-10-05T18:38:36.994067+00:00"
+        },
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "hook_event_first_v1",
+          "selected_idea": "The Wow! Signal: Who sent the unexplained radio transmission detected in 1977?",
+          "script": "A loud, clear radio signal unlike any before was detected for 72 seconds, sparking decades of mystery about its origin. Scientists at Ohio State’s Big Ear telescope called it the “Wow! Signal.” But who sent it? We know it came from the Sagittarius constellation, but it never repeated. Some believe it was an alien message—speculation with no proof. Others suggest natural cosmic phenomena. To this day, the origin of the Wow! Signal remains one of astronomy’s greatest unsolved mysteries. Who, or what, was trying to communicate?",
+          "opening": "A loud, clear radio signal unlike any before was detected for 72 seconds, sparking decades of mystery about its origin.",
+          "word_count": 86,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "a2514ecfa8c1e7a07e83dc0a2c6aa1715b3018b2c12ec1981a5e9ca6d2c0d6ce",
+          "created_at": "2026-10-05T18:38:36.994067+00:00"
+        }
+      ]
+    },
+    {
+      "selected_idea": "The disappearance of the USS Cyclops: Where did the navy ship go in 1918?",
+      "remainder_identical": true,
+      "variants": [
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "baseline",
+          "selected_idea": "The disappearance of the USS Cyclops: Where did the navy ship go in 1918?",
+          "script": "In March 1918, the USS Cyclops vanished without a trace between Barbados and Baltimore—306 crew, gone. No distress calls, no wreckage found. Officially, the mystery remains unsolved. Some suggest a catastrophic storm sank the ship. Others speculate about enemy sabotage during World War I, though no proof exists. Folklore whispers about a Bermuda Triangle curse, but that’s just stories. What really happened to the USS Cyclops? To this day, we don’t know, and the sea keeps its secrets locked tight.",
+          "opening": "In March 1918, the USS Cyclops vanished without a trace between Barbados and Baltimore—306 crew, gone.",
+          "word_count": 80,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "725cfb33ba45c485eb1c8424d59e1c125903f1fa471400d806eb26e342c3e6b4",
+          "created_at": "2026-10-05T18:38:39.423774+00:00"
+        },
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "hook_event_first_v1",
+          "selected_idea": "The disappearance of the USS Cyclops: Where did the navy ship go in 1918?",
+          "script": "The USS Cyclops disappeared without a trace between Barbados and Baltimore in 1918, taking 306 crew members with it. No distress calls, no wreckage found. Officially, the mystery remains unsolved. Some suggest a catastrophic storm sank the ship. Others speculate about enemy sabotage during World War I, though no proof exists. Folklore whispers about a Bermuda Triangle curse, but that’s just stories. What really happened to the USS Cyclops? To this day, we don’t know, and the sea keeps its secrets locked tight.",
+          "opening": "The USS Cyclops disappeared without a trace between Barbados and Baltimore in 1918, taking 306 crew members with it.",
+          "word_count": 83,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "167010168e96f71fd82fbcf0b0965cf4621d091c06356d2b73302cb7e7656f00",
+          "created_at": "2026-10-05T18:38:39.423774+00:00"
+        }
+      ]
+    },
+    {
+      "selected_idea": "The disappearance of the Beaumont children: What happened in 1966 Australia?",
+      "remainder_identical": true,
+      "variants": [
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "baseline",
+          "selected_idea": "The disappearance of the Beaumont children: What happened in 1966 Australia?",
+          "script": "In 1966, three Beaumont children vanished from a quiet Australian beach, sparking one of the country’s most haunting mysteries. Jane, Arnna, and Grant were never seen again after visiting Glenelg Beach. Despite extensive searches and countless leads, their fate remains unknown. Some believe they were kidnapped by a stranger—this is speculation, not confirmed fact. Others suggest they ran away or had an accident—both theories remain unproven. The Beaumont children’s disappearance is a chilling reminder of how a perfect day can end in unanswered questions.",
+          "opening": "In 1966, three Beaumont children vanished from a quiet Australian beach, sparking one of the country’s most haunting mysteries.",
+          "word_count": 84,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "49147fa9989de12c24a1cd378d5f7e0bedf2b160aee827f2d3ef153e79a278bf",
+          "created_at": "2026-10-05T18:38:42.047277+00:00"
+        },
+        {
+          "experiment_name": "hook_structure",
+          "experiment_variant": "hook_event_first_v1",
+          "selected_idea": "The disappearance of the Beaumont children: What happened in 1966 Australia?",
+          "script": "Three Beaumont children disappeared without a trace from Glenelg Beach, leaving a mystery that has puzzled Australia for decades. Jane, Arnna, and Grant were never seen again after visiting Glenelg Beach. Despite extensive searches and countless leads, their fate remains unknown. Some believe they were kidnapped by a stranger—this is speculation, not confirmed fact. Others suggest they ran away or had an accident—both theories remain unproven. The Beaumont children’s disappearance is a chilling reminder of how a perfect day can end in unanswered questions.",
+          "opening": "Three Beaumont children disappeared without a trace from Glenelg Beach, leaving a mystery that has puzzled Australia for decades.",
+          "word_count": 84,
+          "target_duration_seconds": 40,
+          "actual_duration_seconds": null,
+          "model": "gpt-4.1-mini",
+          "script_sha256": "edaae9ca385fcf959b3bf7c7af9c164937dadde568f2d62e5f31dd1419f649f4",
+          "created_at": "2026-10-05T18:38:42.048278+00:00"
+        }
+      ]
+    }
+  ]
+}

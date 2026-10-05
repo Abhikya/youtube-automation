@@ -90,7 +90,7 @@ class DatabaseFoundationTests(unittest.TestCase):
     def test_discovery_is_deterministic(self):
         first = discover_migrations()
         self.assertEqual(first, discover_migrations())
-        self.assertEqual([m.version for m in first], [1])
+        self.assertEqual([m.version for m in first], [1, 2])
         self.assertEqual(len(first[0].checksum), 64)
 
     def test_discovery_rejects_gaps_duplicates_and_invalid_names(self):
@@ -113,9 +113,9 @@ class DatabaseFoundationTests(unittest.TestCase):
     def test_migrations_apply_once_and_verify_history(self):
         migration = discover_migrations()[0]
         connection = self.migration_connection([])
-        self.assertEqual(apply_migrations(connection), [1])
+        self.assertEqual(apply_migrations(connection), [1, 2])
         self.assertTrue(any(call.args[0] == migration.content for call in connection.execute.call_args_list))
-        connection = self.migration_connection([(1, migration.name, migration.checksum)])
+        connection = self.migration_connection([(m.version, m.name, m.checksum) for m in discover_migrations()])
         self.assertEqual(apply_migrations(connection), [])
         self.assertFalse(any(call.args[0] == migration.content for call in connection.execute.call_args_list))
         for saved in ([(1, migration.name, "wrong")], [(2, "future", "hash")]):
@@ -140,17 +140,17 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
         schema = "learning_test_" + uuid4().hex
         with connect_database() as connection:
             with connection.transaction(force_rollback=True):
-                self.assertEqual(apply_migrations(connection, schema=schema), [1])
+                self.assertEqual(apply_migrations(connection, schema=schema), [1, 2])
                 self.assertEqual(apply_migrations(connection, schema=schema), [])
                 names = {row[0] for row in connection.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = %s", (schema,)).fetchall()}
-                self.assertEqual(names, set(TABLES.values()) | {"schema_migrations"})
+                self.assertEqual(names, set(TABLES.values()) | {"schema_migrations", "learning_observations", "learning_evidence"})
                 indexes = connection.execute("SELECT indexdef FROM pg_indexes WHERE schemaname = %s", (schema,)).fetchall()
                 self.assertTrue(any("collected_at" in row[0] for row in indexes))
                 self.assertTrue(any("built_at DESC" in row[0] for row in indexes))
                 foreign_keys = connection.execute("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname=%s AND c.contype='f'", (schema,)).fetchone()[0]
                 self.assertGreaterEqual(foreign_keys, 9)
                 originals = []
-                order = [0, 5, 1, 2, 3, 4]
+                order = [0, 1, 2, 3, 4, 5]
                 for channel in ("channel-a", "channel-b"):
                     for i in order:
                         model, data = fixtures()[i]
@@ -164,13 +164,22 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
                             for observation in data["observations"]:
                                 for reference in observation["evidence"]:
                                     reference["channel_context_id"] = channel
+                                    reference["record_id"] = "snapshot-1"
                             for reference in data.get("examples") or []:
                                 reference["channel_context_id"] = channel
+                                reference["record_id"] = "gen-1"
                         if "youtube_video_id" in data:
                             data["youtube_video_id"] = "video-" + channel
                         if model is GenerationRecord:
                             data["measured_duration_seconds"] = 40.5
                         original = model.model_validate(data)
+                        if model is LearningContext:
+                            from engine.learning.repositories import LearningRepository
+                            repo = LearningRepository(connection,channel,schema=schema)
+                            self.assertEqual(repo.create_context(original),original)
+                            self.assertEqual(repo.get_context(original.context_id),original)
+                            originals.append(original)
+                            continue
                         columns = to_columns(original)
                         statement = sql.SQL("INSERT INTO {}.{} ({}) VALUES ({}) RETURNING *").format(sql.Identifier(schema), sql.Identifier(TABLES[model]), sql.SQL(", ").join(map(sql.Identifier, columns)), sql.SQL(", ").join(sql.Placeholder() for _ in columns))
                         with connection.cursor(row_factory=dict_row) as cursor:
