@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import json
 import re
 import uuid
+import time
+from email.utils import parsedate_to_datetime
 
 from engine.learning.schema import MetricSnapshot
 
@@ -12,9 +14,10 @@ SOURCE = "youtube-data-api-v3/videos.list"
 
 
 class CollectionError(RuntimeError):
-    def __init__(self, code):
+    def __init__(self, code, *, retryable=False):
         super().__init__(code)
         self.code = code
+        self.retryable = retryable
 
 
 def video_id(value):
@@ -74,19 +77,57 @@ def authenticated_channel_preflight(profile, *, service_factory=None):
 
 class YouTubeStatisticsProvider:
     """Borrow the existing authenticated YouTube service. Only videos.list is used."""
-    def __init__(self, service):
+    def __init__(self, service, *, max_retries=3, sleep=None, clock=None):
+        if type(max_retries) is not int or not 0 <= max_retries <= 5:
+            raise ValueError("max_retries must be between zero and five")
         self.service = service
+        self.max_retries = max_retries
+        self.sleep = sleep or time.sleep
+        self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def fetch(self, identifier):
         video_id(identifier)
-        try:
-            response = self.service.videos().list(
-                part="snippet,statistics", id=identifier,
-                fields="items(id,snippet/channelId,statistics(viewCount,likeCount,commentCount))",
-            ).execute()
-        except Exception:
-            raise CollectionError("YouTubeRequestFailed") from None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.service.videos().list(
+                    part="snippet,statistics", id=identifier,
+                    fields="items(id,snippet/channelId,statistics(viewCount,likeCount,commentCount))",
+                ).execute(num_retries=0)
+                break
+            except Exception as exc:
+                transient, delay = self._retry_policy(exc, attempt)
+                if not transient:
+                    raise CollectionError("YouTubeRequestFailed") from None
+                # Long server delays are deferred, never shortened or slept through.
+                if attempt == self.max_retries or delay > 60:
+                    raise CollectionError("YouTubeRetryDeferred", retryable=True) from None
+                self.sleep(delay)
         return parse_response(response, identifier)
+
+    def _retry_policy(self, exc, attempt):
+        from googleapiclient.errors import HttpError
+        transient = isinstance(exc, (TimeoutError, ConnectionResetError, ConnectionAbortedError))
+        headers = {}
+        if isinstance(exc, HttpError):
+            headers = exc.resp
+            transient = exc.resp.status in {408, 429, 500, 502, 503, 504}
+            if exc.resp.status == 403:
+                try:
+                    errors = json.loads(exc.content).get("error", {}).get("errors", [])
+                    reasons = {error.get("reason") for error in errors}
+                    transient = bool(reasons) and reasons <= {"rateLimitExceeded", "userRateLimitExceeded"}
+                except Exception:
+                    transient = False
+        delay = 2 ** attempt
+        value = headers.get("retry-after") or headers.get("Retry-After")
+        if value:
+            try:
+                supplied = float(value) if str(value).isdigit() else (parsedate_to_datetime(value) - self.clock()).total_seconds()
+                delay = max(delay, supplied)
+            except (ValueError, TypeError, OverflowError):
+                pass
+        return transient, delay
+
 
 
 def parse_response(response, identifier):
@@ -200,7 +241,8 @@ class MetricCollector:
             # Never return provider/driver exception text: it may contain secrets.
             return {"video_id": identifier if isinstance(identifier, str) else None,
                     "success": False, "error_type": exc.code if isinstance(exc, CollectionError) else type(exc).__name__,
-                    "snapshot": snapshot, "persisted": False}
+                    "snapshot": snapshot, "persisted": False,
+                    "retryable": isinstance(exc, CollectionError) and exc.retryable}
 
     def collect_batch(self, channel_context_id, identifiers, *, persist=True):
         return [self.collect(channel_context_id, identifier, persist=persist) for identifier in identifiers]

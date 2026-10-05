@@ -100,3 +100,31 @@ uploads or profile mutation. Obtain the channel-scoped profile through existing
 repository reads; callers must gate subsequent collector calls on the result.
 Existing collector behavior remains unchanged; it does not invoke this preflight
 automatically. No live preflight or collection runs at module import.
+
+## Operational stored-publication batch
+
+Preview (real YouTube channel/statistics reads, no database writes):
+`python -B -m engine.learning.batch_collection --channel-context-id <stored-context-id> --dry-run`
+
+Explicit append-only persistence:
+`python -B -m engine.learning.batch_collection --channel-context-id <stored-context-id> --persist`
+
+Preview is the default. Both modes require authenticated-channel MATCH; no mapping
+is assigned. Authentication may refresh/save local credentials. Preview uses a
+read-only rollback-only database transaction. Collection only reads stored,
+channel-scoped publications with valid video IDs, including recorded private/unlisted
+videos and unknown publication dates; explicitly future publication dates are skipped.
+It does not discover or import an entire YouTube channel. Inventory is paginated;
+one video's failure does not stop later videos. Results contain collected/skipped/
+failed/retryable states, metrics/snapshot identities where available and summary totals.
+PREVIEW observations are not persisted. Exit status is nonzero for failed/retryable
+items or batch setup failures. Existing snapshot identity/conflict rules are unchanged.
+
+Statistics requests have three retries maximum, exponential backoff and Google's
+nested retries disabled. Only HTTP 408/429/500/502/503/504, explicit 403 rate-limit
+reasons and timeout/connection reset/abort are retried. Daily quota, authorization,
+malformed responses and ownership failures are not retried. Retry-After seconds or
+HTTP dates are respected. A wait longer than 60 seconds is deferred as retryable,
+without retrying early. Exhausted transient requests are retryable; no permanent
+errors or database failures are automatically retried. No production scheduling is
+installed by this CLI. Tests use only fake services and database fixtures.
