@@ -1,4 +1,5 @@
 import os
+import re
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -18,7 +19,10 @@ Return ONLY in this exact format:
 
 TITLE: ...
 DESCRIPTION: ...
-HASHTAGS: #tag1 #tag2 #tag3 #tag4 #tag5 #tag6 #tag7 #tag8
+HASHTAGS: #shorts #topic1 #topic2 #topic3
+Include #shorts and 2-4 additional hashtags strongly relevant to this script.
+Use lowercase, unique hashtags. Avoid #viral, #fyp and #trending.
+Do not invent unrelated categories or put hashtags in the title or description.
 
 Script:
 {script}
@@ -48,8 +52,20 @@ Script:
             hashtags_text = line.split(":", 1)[1].strip()
             hashtags = [tag for tag in hashtags_text.split() if tag.startswith("#")]
 
+    # Reuse generated topic tags; never invent categories when they are missing.
+    normalized = ["#shorts"]
+    seen = {"#shorts", "#viral", "#fyp", "#trending"}
+    for tag in hashtags:
+        tag = tag.lower()
+        if not re.fullmatch(r"#\w+", tag) or tag in seen:
+            continue
+        seen.add(tag)
+        normalized.append(tag)
+        if len(normalized) == 5:
+            break
+
     return {
         "Title": title,
         "Description": description,
-        "Hashtags": hashtags
+        "Hashtags": normalized
     }
