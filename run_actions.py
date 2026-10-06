@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import uuid
 import zipfile
 
@@ -95,6 +96,14 @@ def validate_state(state, day, generation_run=None):
                                           for v in memory.values()), 'Invalid idea memory')
 
 
+class ArtifactAPIError(ProductionError):
+    """Structured REST failure; no response body or credentials retained."""
+    def __init__(self, status_code, endpoint):
+        super().__init__(f'GitHub artifact API failed (HTTP {status_code})')
+        self.status_code = status_code
+        self.endpoint = endpoint
+
+
 class StaleStateConflict(ProductionError):
     """A proposed snapshot must be reconciled with the newer authoritative head."""
     def __init__(self, state, proposed):
@@ -121,7 +130,7 @@ class GitHubArtifacts:
                                         timeout=(20, 120), **kwargs)
         if response.status_code not in (200, 204, 302):
             # Never print a response body, signed download URL or Authorization header.
-            raise ProductionError(f'GitHub artifact API failed (HTTP {response.status_code})')
+            raise ArtifactAPIError(response.status_code, endpoint)
         return response
 
     def artifacts(self):
@@ -188,6 +197,7 @@ class GitHubArtifacts:
 
     def by_id(self, artifact_id, run_id):
         artifact = self.api_request('GET', f'actions/artifacts/{artifact_id}').json()
+        require(artifact.get('id') == artifact_id, 'Artifact identity mismatch')
         require(artifact['workflow_run']['id'] == run_id, 'Media artifact belongs to the wrong run')
         return self.trusted(artifact)
 
@@ -228,7 +238,18 @@ const p = JSON.parse(fs.readFileSync(0, 'utf8'));
         lines = [line for line in result.stdout.splitlines() if line.startswith('ARTIFACT_RESULT=')]
         require(len(lines) == 1, 'Artifact upload result missing')
         artifact_id = json.loads(lines[0].split('=', 1)[1])['id']
-        artifact = self.by_id(artifact_id, self.run_id)
+        # Only this process's newly created artifact may have delayed REST visibility.
+        # Retry confirmation of the SAME ID, never the artifact upload itself.
+        for attempt, delay in enumerate((0, 1, 2, 4, 8)):
+            if delay:
+                time.sleep(delay)
+            try:
+                artifact = self.by_id(artifact_id, self.run_id)
+                break
+            except ArtifactAPIError as exc:
+                if (exc.status_code != 404 or
+                        exc.endpoint != f'actions/artifacts/{artifact_id}' or attempt == 4):
+                    raise
         require(artifact['name'] == name, 'Artifact checkpoint identity mismatch')
         return artifact
 

@@ -592,3 +592,86 @@ class ArtifactTrustTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class NewArtifactConfirmationTests(unittest.TestCase):
+    def setUp(self):
+        self.store = GitHubArtifacts.__new__(GitHubArtifacts)
+        self.store.run_id = 100
+        self.store.repo = "owner/repository"
+        self.store.branch = "main"
+        self.store.api = "https://api.github.com"
+        self.store.verified_runs = {100}
+        self.store.session = Mock()
+        self.artifact = {"id": 123, "name": "new-state", "expired": False,
+                         "workflow_run": {"id": 100}}
+
+    def response(self, status, artifact=None):
+        return Mock(status_code=status, json=Mock(return_value=artifact or self.artifact))
+
+    def confirm(self, responses):
+        self.store.session.request.side_effect = responses
+        with patch("run_actions.subprocess.run", return_value=Mock(
+                returncode=0, stdout='ARTIFACT_RESULT={"id":123}')) as upload, \
+                patch("run_actions.time.sleep") as sleep:
+            result = self.store.upload("new-state", Path("state.json"), 90)
+            upload.assert_called_once()
+            return result, sleep.call_args_list
+
+    def test_immediate_success(self):
+        result, delays = self.confirm([self.response(200)])
+        self.assertEqual(result["id"], 123)
+        self.assertEqual(delays, [])
+
+    def test_one_404_then_success(self):
+        result, delays = self.confirm([self.response(404), self.response(200)])
+        self.assertEqual(result["id"], 123)
+        self.assertEqual([c.args[0] for c in delays], [1])
+
+    def test_multiple_404_same_id_one_upload(self):
+        result, delays = self.confirm([self.response(404)] * 4 + [self.response(200)])
+        self.assertEqual([c.args[0] for c in delays], [1, 2, 4, 8])
+        self.assertEqual(self.store.session.request.call_count, 5)
+        for call in self.store.session.request.call_args_list:
+            self.assertTrue(call.args[1].endswith('/actions/artifacts/123'))
+
+    def test_persistent_404_fails_closed(self):
+        with patch("run_actions.subprocess.run", return_value=Mock(
+                returncode=0, stdout='ARTIFACT_RESULT={"id":123}')) as upload, \
+                patch("run_actions.time.sleep") as sleep:
+            self.store.session.request.return_value = self.response(404)
+            with self.assertRaisesRegex(ProductionError, "HTTP 404"):
+                self.store.upload("new-state", Path("state.json"), 90)
+            upload.assert_called_once()
+            self.assertEqual(self.store.session.request.call_count, 5)
+            self.assertEqual([c.args[0] for c in sleep.call_args_list], [1,2,4,8])
+
+    def test_non_404_not_retried(self):
+        for status in (401,403,429,500):
+            with self.subTest(status=status):
+                self.store.session.request.reset_mock()
+                with self.assertRaisesRegex(ProductionError, f"HTTP {status}"):
+                    self.confirm([self.response(status)])
+                self.assertEqual(self.store.session.request.call_count, 1)
+
+    def test_wrong_id_name_run_and_expired_fail(self):
+        for changes in ({"id":456}, {"name":"other"}, {"workflow_run":{"id":999}}, {"expired":True}):
+            with self.subTest(changes=changes):
+                self.store.session.request.reset_mock()
+                with self.assertRaises(ProductionError):
+                    self.confirm([self.response(200, {**self.artifact, **changes})])
+                self.assertEqual(self.store.session.request.call_count, 1)
+
+    def test_historical_404_not_retried(self):
+        self.store.session.request.return_value = self.response(404)
+        with patch("run_actions.time.sleep") as sleep:
+            with self.assertRaisesRegex(ProductionError, "HTTP 404"):
+                self.store.by_id(123,100)
+            sleep.assert_not_called()
+        self.assertEqual(self.store.session.request.call_count, 1)
+
+    def test_workflow_lookup_404_not_retried(self):
+        self.store.verified_runs.clear()
+        with self.assertRaisesRegex(ProductionError, "HTTP 404"):
+            self.confirm([self.response(200),self.response(404)])
+        self.assertEqual(self.store.session.request.call_count,2)
