@@ -1,0 +1,114 @@
+name: Phase 2 Advisory Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Analytics start date (Pacific calendar day, inclusive)'
+        required: true
+        type: string
+        default: '2026-10-01'
+      end_date_exclusive:
+        description: 'Exclusive end date; blank uses today in Pacific time'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  advisory-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Restore OAuth credential for read-only reporting
+        env:
+          YOUTUBE_TOKEN_PICKLE_B64: ${{ secrets.YOUTUBE_TOKEN_PICKLE_B64 }}
+        run: |
+          python -B - <<'PY'
+          import base64, os
+          from pathlib import Path
+          encoded = os.environ.get('YOUTUBE_TOKEN_PICKLE_B64', '')
+          if not encoded:
+              raise SystemExit('::error::YOUTUBE_TOKEN_PICKLE_B64 credential is unavailable')
+          try:
+              payload = base64.b64decode(encoded, validate=True)
+              if not payload:
+                  raise ValueError()
+              with open('token.pickle', 'xb') as token:
+                  os.chmod('token.pickle', 0o600)
+                  token.write(payload)
+          except Exception:
+              raise SystemExit('::error::Unable to restore OAuth credential securely') from None
+          PY
+      - name: Generate read-only Phase 2 advisory report
+        env:
+          ANALYSIS_START_DATE: ${{ inputs.start_date }}
+          ANALYSIS_END_DATE_EXCLUSIVE: ${{ inputs.end_date_exclusive }}
+        run: |
+          python -B - <<'PY'
+          import hashlib, json, os
+          from datetime import date, datetime, timezone
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+          from engine.learning.advisory_report import build_report, validate_inventory
+          from engine.learning.analytics_reader import authenticated_reader
+          source = Path('phase2/reporting/accepted_production_inventory.json')
+          if not source.is_file():
+              raise SystemExit('::error::Accepted production inventory is missing')
+          reader = None
+          token = Path('token.pickle')
+          before = hashlib.sha256(token.read_bytes()).hexdigest()
+          try:
+              inventory = json.loads(source.read_text(encoding='utf-8'))
+              validate_inventory(inventory)
+              now = datetime.now(timezone.utc)
+              start = date.fromisoformat(os.environ['ANALYSIS_START_DATE'])
+              end = date.fromisoformat(os.environ['ANALYSIS_END_DATE_EXCLUSIVE']) if os.environ['ANALYSIS_END_DATE_EXCLUSIVE'] else now.astimezone(ZoneInfo('America/Los_Angeles')).date()
+              if start >= end or end > now.astimezone(ZoneInfo('America/Los_Angeles')).date():
+                  raise ValueError('InvalidAnalysisWindow')
+              reader = authenticated_reader('UCR2L8UE-pc1Hd7U3AurrECQ')
+              report = build_report(inventory, reader,
+                  channel_context_id='4491252f-3db8-5466-891b-a15a7d3a7271',
+                  expected_channel='UCR2L8UE-pc1Hd7U3AurrECQ',
+                  start=start, end=end, generated_at=now)
+              if before != hashlib.sha256(token.read_bytes()).hexdigest():
+                  raise ValueError('CredentialFileChanged')
+              with open('phase2-advisory-report.json', 'x', encoding='utf-8') as output:
+                  json.dump(report, output, indent=2, sort_keys=True, allow_nan=False)
+                  output.write('\n')
+          except Exception as exc:
+              messages = {
+                  'AnalyticsAuthenticationFailed': 'OAuth authentication or in-memory refresh failed',
+                  'AuthenticatedChannelNotMatched': 'Authenticated channel lookup failed or does not match Minute Mysteries',
+                  'InvalidAnalysisWindow': 'Analysis dates must cover completed Pacific calendar days',
+                  'CredentialFileChanged': 'OAuth token file unexpectedly changed',
+              }
+              message = messages.get(str(exc), 'Phase 2 report generation failed; no credential details are logged')
+              raise SystemExit('::error::' + message) from None
+          finally:
+              if reader is not None:
+                  reader.close()
+          PY
+      - name: Upload advisory JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-advisory-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: phase2-advisory-report.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove temporary OAuth credential
+        if: always()
+        run: rm -f -- token.pickle
