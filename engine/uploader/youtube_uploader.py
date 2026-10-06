@@ -22,6 +22,54 @@ from config.settings import (
     YOUTUBE_PRIVACY_STATUS,
 )
 
+from dataclasses import dataclass, field
+from pathlib import Path
+from config.channels import MINUTE_MYSTERIES, ChannelConfig, validate_channel_scope
+
+
+@dataclass(frozen=True)
+class YouTubeCredentialContext:
+    """One operation's immutable identity and private authenticated-service cache."""
+    channel: ChannelConfig = MINUTE_MYSTERIES
+    credential_reference: str | None = None
+    _bound: dict = field(default_factory=dict, init=False, repr=False, compare=False)
+
+    def __post_init__(self):
+        validate_channel_scope(self.channel)
+        reference = self.channel.credential_reference if self.credential_reference is None else self.credential_reference
+        if reference != self.channel.credential_reference:
+            raise ValueError("Credential reference does not belong to channel")
+        object.__setattr__(self, "credential_reference", reference)
+        token = Path(YOUTUBE_TOKEN_FILE)
+        if self.channel != MINUTE_MYSTERIES:
+            token = token.parent / '.credentials' / self.channel.channel_key / 'token.pickle'
+        self._bound['token_file'] = token
+
+    @property
+    def token_file(self):
+        return self._bound['token_file']
+
+    def require_channel(self, expected):
+        if expected != self.channel.youtube_channel_id:
+            raise ValueError("Credential context channel mismatch")
+
+    def service(self):
+        if 'service' not in self._bound:
+            self._bound['service'] = get_authenticated_service(credential_context=self)
+        return self._bound['service']
+
+    def verified_service(self):
+        if self._bound.get('verified_channel') != self.channel.youtube_channel_id:
+            raise UploadNotStarted("Credential context must pass channel preflight before upload/verification")
+        return self.service()
+
+    def close(self):
+        service = self._bound.pop('service', None)
+        self._bound.pop('verified_channel', None)
+        if service is not None:
+            service.close()
+
+
 SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
 MAX_UPLOAD_RETRIES = 5
@@ -79,11 +127,12 @@ def complete_resumable_upload(request):
     return response
 
 
-def get_authenticated_service(*, allow_interactive=False, read_only=False):
+def get_authenticated_service(*, allow_interactive=False, read_only=False, credential_context=None):
+    token_file = credential_context.token_file if credential_context is not None else YOUTUBE_TOKEN_FILE
     creds = None
 
-    if os.path.isfile(YOUTUBE_TOKEN_FILE):
-        with open(YOUTUBE_TOKEN_FILE, "rb") as token:
+    if os.path.isfile(token_file):
+        with open(token_file, "rb") as token:
             creds = pickle.load(token)
 
     if read_only:
@@ -114,7 +163,7 @@ def get_authenticated_service(*, allow_interactive=False, read_only=False):
             )
             creds = flow.run_local_server(port=0, access_type="offline", prompt="consent")
 
-        with open(YOUTUBE_TOKEN_FILE, "wb") as token:
+        with open(token_file, "wb") as token:
             pickle.dump(creds, token)
 
     return build("youtube", "v3", credentials=creds)
@@ -128,7 +177,7 @@ class PublicationExpired(UploadNotStarted):
     """The intended slot elapsed before any insertion request was made."""
 
 
-def upload_video(video_path, title, description, tags, *, publish_at=None):
+def upload_video(video_path, title, description, tags, *, publish_at=None, credential_context=None):
     if not os.path.isfile(video_path):
         raise FileNotFoundError(f"Rendered video not found: {video_path}")
     if not isinstance(title, str) or not title.strip():
@@ -148,7 +197,7 @@ def upload_video(video_path, title, description, tags, *, publish_at=None):
             raise PublicationExpired("Publication time invalid or expired before authentication; slot retained") from None
         status.update(privacyStatus="private", publishAt=publish_at)
     try:
-        youtube = get_authenticated_service()
+        youtube = credential_context.verified_service() if credential_context is not None else get_authenticated_service()
     except Exception:
         if publish_at is not None:
             raise UploadNotStarted("Scheduled upload authentication failed before insertion") from None
@@ -217,32 +266,41 @@ def validate_future_publish_at(value, now=None):
     return stamp
 
 
-def preparation_preflight(expected_channel):
+def preparation_preflight(expected_channel, *, credential_context=None):
+    if credential_context is not None:
+        credential_context.require_channel(expected_channel)
+        credential_context._bound.pop("verified_channel", None)
+    token_file = credential_context.token_file if credential_context is not None else YOUTUBE_TOKEN_FILE
     # Scope/channel failures occur before claiming an upload; renders remain recoverable.
-    with open(YOUTUBE_TOKEN_FILE, "rb") as token:
+    with open(token_file, "rb") as token:
         creds = pickle.load(token)
     if not creds.has_scopes(SCOPES):
         raise RuntimeError("Preparation requires youtube.force-ssl; reauthorize locally and replace the Actions token secret")
-    service = get_authenticated_service()
+    service = credential_context.service() if credential_context is not None else get_authenticated_service()
     try:
         channels = service.channels().list(part="id", mine=True).execute().get("items", [])
         if [c.get("id") for c in channels] != [expected_channel]:
             raise ValueError("Authenticated YouTube channel does not match configured channel")
+        if credential_context is not None:
+            credential_context._bound["verified_channel"] = expected_channel
     finally:
-        service.close()
+        if credential_context is None:
+            service.close()
 
 
-def upload_prepared_video(path, metadata, publish_at):
+def upload_prepared_video(path, metadata, publish_at, *, credential_context=None):
     response = upload_video(path, metadata["Title"], metadata["Description"], metadata["Hashtags"],
-                            publish_at=publish_at)
+                            publish_at=publish_at, **({"credential_context": credential_context} if credential_context is not None else {}))
     return {"success": True, "status": "uploaded", "video_id": response["id"],
             "video_url": "https://www.youtube.com/watch?v=" + response["id"],
             "privacy_status": "private", "publish_at": publish_at}
 
 
-def verify_prepared_video(video_id, expected_channel, publish_at):
+def verify_prepared_video(video_id, expected_channel, publish_at, *, credential_context=None):
+    if credential_context is not None:
+        credential_context.require_channel(expected_channel)
     validate_future_publish_at(publish_at)
-    service = get_authenticated_service()
+    service = credential_context.verified_service() if credential_context is not None else get_authenticated_service()
     try:
         def read():
             values = service.videos().list(id=video_id, part="snippet,status,processingDetails").execute().get("items", [])
@@ -275,7 +333,8 @@ def verify_prepared_video(video_id, expected_channel, publish_at):
                 "publish_at": actual, "processing_status": video.get("processingDetails", {}).get("processingStatus"),
                 "checked_at": datetime.now(timezone.utc).isoformat()}
     finally:
-        service.close()
+        if credential_context is None:
+            service.close()
 
 
 if __name__ == "__main__":

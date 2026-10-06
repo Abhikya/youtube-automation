@@ -116,6 +116,7 @@ def build_short_video(
     height: int = 1920,
     subtitles: Optional[List[str]] = None,
     music_path: Optional[str] = None,
+    temp_audiofile: Optional[str] = None,
 ):
     if not clips:
         raise ValueError("No clips provided.")
@@ -171,6 +172,7 @@ def build_short_video(
         audio_codec="aac",
         preset="fast",
         bitrate="800k",
+        **({"temp_audiofile": temp_audiofile} if temp_audiofile is not None else {}),
     )
 
     final_audio.close()

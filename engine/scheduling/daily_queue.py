@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 from filelock import FileLock, Timeout
 from config.settings import DATA_DIR, SCHEDULER_TIMEZONE, UPLOAD_TIMES
 
+from config.channels import MINUTE_MYSTERIES, RuntimePaths, channel_identity, validate_channel_identity, slot_owner, valid_slot_owner, validate_channel_scope
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,9 +39,10 @@ def india_now():
     return datetime.now(ZoneInfo(SCHEDULER_TIMEZONE))
 
 
-def generate_only():
+def generate_only(*, channel=MINUTE_MYSTERIES, runtime_paths=None):
     from engine.pipeline.video_pipeline import generate_video
-    return generate_video(publish=False)
+    from config.settings import BASE_DIR
+    return generate_video(publish=False, runtime_paths=runtime_paths or RuntimePaths(channel, BASE_DIR))
 
 
 def upload_existing(path, metadata):
@@ -57,9 +60,11 @@ class CheckpointError(RuntimeError):
 
 
 class DailyQueue:
-    def __init__(self, data_dir=DATA_DIR, *, checkpoint=None):
+    def __init__(self, data_dir=DATA_DIR, *, checkpoint=None, channel=MINUTE_MYSTERIES):
+        validate_channel_scope(channel)
+        self.channel = channel
         self.checkpoint = checkpoint
-        self.data_dir = Path(data_dir)
+        self.data_dir = Path(data_dir) if channel == MINUTE_MYSTERIES else Path(data_dir) / channel.channel_key
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
     def path(self, day):
@@ -73,12 +78,18 @@ class DailyQueue:
             data = json.load(stream)
         if not isinstance(data, dict) or data.get("date") != day.isoformat() or data.get("timezone") != SCHEDULER_TIMEZONE:
             raise ValueError("Queue date/timezone mismatch")
+        validate_channel_identity(data, self.channel, allow_legacy=self.channel == MINUTE_MYSTERIES)
         videos = data.get("videos")
         if not isinstance(videos, list) or any(not isinstance(item, dict) for item in videos):
             raise ValueError("Queue videos must be a list of objects")
         slots = [item.get("slot") for item in videos]
         if any(slot not in UPLOAD_TIMES for slot in slots) or len(slots) != len(set(slots)):
             raise ValueError("Queue contains invalid or duplicate slots")
+        for item in videos:
+            if "channel_key" in item and item["channel_key"] != self.channel.channel_key:
+                raise ValueError("Queue item channel mismatch")
+            if "upload_owner" in item and not valid_slot_owner(item["upload_owner"], self.channel, day, item["slot"]):
+                raise ValueError("Upload claim ownership mismatch")
         return data
 
     def read(self, day):
@@ -86,6 +97,14 @@ class DailyQueue:
             return self._read(day)
 
     def _write(self, day, data):
+        validate_channel_identity(data, self.channel, allow_legacy=self.channel == MINUTE_MYSTERIES)
+        data.update(channel_identity(self.channel))
+        for item in data["videos"]:
+            if item.get("channel_key", self.channel.channel_key) != self.channel.channel_key:
+                raise ValueError("Queue item channel mismatch")
+            if "upload_owner" in item and not valid_slot_owner(item["upload_owner"], self.channel, day, item["slot"]):
+                raise ValueError("Upload claim ownership mismatch")
+            item["channel_key"] = self.channel.channel_key
         temporary = None
         try:
             with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.data_dir,
@@ -115,7 +134,9 @@ class DailyQueue:
 
     def generate_batch(self, day=None, generator=None, *, slots=None, resume=False, max_attempts=2, context=None, before_generation=None, generation_allowed=None):
         day = day or india_now().date()
-        generator = generator or generate_only
+        if generator is None:
+            from functools import partial
+            generator = partial(generate_only, channel=self.channel)
         slots = list(UPLOAD_TIMES if slots is None else slots)
         if not slots or any(slot not in UPLOAD_TIMES for slot in slots) or len(set(slots)) != len(slots):
             raise ValueError("Generation slots must be unique existing publishing slots")
@@ -133,7 +154,7 @@ class DailyQueue:
                      "video_path": None, "metadata": None, "idea": None, "script": None,
                      "youtube": None, "telegram": None, "generation_completed_at": None,
                      "generated_files": [], "cleanup": {"status": "pending"}} for slot in slots
-                ], **(context or {})}
+                ], **channel_identity(self.channel), **(context or {})}
                 if existing is None:
                     self.update(day, lambda existing: data if existing is None else None)
                 logger.info("Daily batch started for %s", day)
@@ -171,7 +192,7 @@ class DailyQueue:
                             self._set(day, slot, fields)
                         try:
                             from engine.scheduling.cleanup import record_generated_file
-                            fields["generated_files"] = [record_generated_file(result["video_path"], day, slot)]
+                            fields["generated_files"] = [record_generated_file(result["video_path"], day, slot, channel=self.channel)]
                         except Exception as exc:
                             logger.exception("Video %s: cleanup ownership could not be recorded", index)
                             fields["cleanup"] = {"status": "rejected", "error": str(exc)}
@@ -211,6 +232,8 @@ class DailyQueue:
     def _upload_slot(self, slot, day=None, uploader=None, notifier=None, *, retry_failed=False):
         if slot not in UPLOAD_TIMES:
             raise ValueError(f"Unknown publishing slot: {slot}")
+        if self.channel != MINUTE_MYSTERIES and uploader is None:
+            raise ValueError("Non-default legacy upload requires an explicitly bound uploader")
         day = day or india_now().date()
         uploader = uploader or upload_existing
         notifier = notifier or notify_existing
@@ -262,6 +285,7 @@ class DailyQueue:
                 item["youtube"] = None
                 item["telegram"] = None
                 logger.info("%s: explicit manual retry claimed for the existing rendered video", slot)
+            item["upload_owner"] = slot_owner(self.channel, day, slot)
             item["upload_status"] = "uploading"
             claimed.append(dict(item))
             return data

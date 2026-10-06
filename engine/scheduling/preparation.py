@@ -5,6 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from filelock import FileLock
 from config.settings import UPLOAD_TIMES
+from config.channels import slot_owner
 from engine.scheduling.daily_queue import india_now
 from run_actions import Production, StaleStateConflict, require
 from engine.scheduling.daily_queue import CheckpointError
@@ -132,7 +133,12 @@ class Preparation(Production):
                     logger.warning("Reloaded newer checkpoint for target %s; resuming without overwriting its slots", self.day)
         raise AssertionError("Unreachable checkpoint retry state")
 
-    def _prepare_once(self, *, expected_channel, generator=None, uploader=None, verifier=None, notifier=None, now=None, authenticate=None, before_render=None, allow_current_day=False, started_at=None):
+    def _prepare_once(self, *, expected_channel, generator=None, uploader=None, verifier=None, notifier=None, now=None, authenticate=None, before_render=None, allow_current_day=False, started_at=None, credential_context=None):
+        from config.channels import MINUTE_MYSTERIES
+        require(self.channel == MINUTE_MYSTERIES or credential_context is not None, "Non-default preparation requires a credential context")
+        if credential_context is not None:
+            require(credential_context.channel == self.channel, "Preparation credential/state channel mismatch")
+            credential_context.require_channel(expected_channel)
         clock = now or india_now
         initial = started_at or clock()
         require(initial.utcoffset() is not None, "Preparation clock must be timezone-aware")
@@ -183,10 +189,18 @@ class Preparation(Production):
             self.queue.checkpoint = self.checkpoint
             if uploader is None:
                 from engine.uploader.youtube_uploader import upload_prepared_video
-                uploader = upload_prepared_video
+                if credential_context is not None:
+                    from functools import partial
+                    uploader = partial(upload_prepared_video, credential_context=credential_context)
+                else:
+                    uploader = upload_prepared_video
             if verifier is None:
                 from engine.uploader.youtube_uploader import verify_prepared_video
-                verifier = verify_prepared_video
+                if credential_context is not None:
+                    from functools import partial
+                    verifier = partial(verify_prepared_video, credential_context=credential_context)
+                else:
+                    verifier = verify_prepared_video
             if notifier is None:
                 from engine.approval.telegram_bot import notify_generated_video
                 notifier = notify_generated_video
@@ -232,7 +246,7 @@ class Preparation(Production):
                     if not self._future(slot, clock):
                         problems.append({"slot": slot, "reason": "publish_at_not_future"})
                         continue
-                    self.queue._set(self.day, slot, {"upload_status": "uploading"})
+                    self.queue._set(self.day, slot, {"upload_status": "uploading", "upload_owner": slot_owner(self.channel, self.day, slot)})
                     try:
                         youtube = uploader(item["video_path"], item["metadata"], publication_time(self.day, slot))
                         require(isinstance(youtube, dict) and youtube.get("success") is True and youtube.get("video_id"),
@@ -316,8 +330,11 @@ class Preparation(Production):
             self.queue.update(self.day, lambda saved: {**saved, "batch_telegram": notification})
             return self._result(clock, expected_channel, problems=problems)
 
-    def reconcile_not_uploaded(self, slot, *, expected_channel, now=None):
+    def reconcile_not_uploaded(self, slot, *, expected_channel, now=None, credential_context=None):
         """Explicit operator attestation only; never infer absence from a missing ID."""
+        if credential_context is not None:
+            require(credential_context.channel == self.channel, "Reconciliation credential/state channel mismatch")
+            credential_context.require_channel(expected_channel)
         clock = now or india_now
         with FileLock(str(self.scratch / "preparation.lock"), timeout=0):
             self.queue.checkpoint = None

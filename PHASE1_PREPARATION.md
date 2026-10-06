@@ -29,3 +29,84 @@ Default preparation first checks the existing current-day batch and recovers saf
 Only after manually confirming in the correct channel's YouTube Studio that no uploaded/private/scheduled video exists for the exact slot, dispatch the production workflow with operation=prepare, day=2026-10-03, confirmed_not_uploaded_slot=14:00. Leave this input blank for ordinary dispatches. The equivalent Actions CLI is `python run_actions.py prepare --day 2026-10-03 --confirm-not-uploaded-slot 14:00`.
 
 This records the operator's Studio confirmation and prior unresolved claim in the durable checkpoint, then releases only that generated slot to pending and resumes preparation. It refuses ID-bearing/confirmed uploads, wrong channels, missing renders, non-unresolved states, older target dates and elapsed publication slots. It never treats a missing ID alone as evidence of absence. Retry remains subject to the existing future-publishAt checks; run before Oct 3 14:00 IST. Do not use this confirmation input to repeat a transfer whose acceptance remains unknown. A later retry after an authentication failure should omit the confirmation input because reconciliation is already saved.
+
+## Phase 3 configuration foundation (not enabled)
+
+`config/channels.py` defines the immutable Minute Mysteries configuration and a
+validated registry resolver. Production still uses existing settings, prompts and
+secret loading; this descriptive configuration does not change runtime behavior.
+Preparation times describe the existing external dispatch opportunities, not a
+new scheduler. Content instructions summarize existing rules; existing prompt
+text remains authoritative and unchanged.
+
+No legacy state is migrated: `daily_queue_DATE.json`, `mystery-state-*`,
+`mystery-media-*`, `.actions-work`, `data/idea_memory.json`, `token.pickle`,
+`output/videos`, `temp/audio` and `temp/clips` retain their current identities.
+Namespace fields record current roots/prefix identity; they do not rename paths.
+A later isolation step must explicitly adopt legacy checkpoints and preserve
+confirmed IDs, claims, fingerprints and recovery history before enabling another
+channel. Credential/Telegram fields contain reference names only, never secrets.
+
+## Phase 3 durable state identity (single channel remains enabled)
+
+New queues/checkpoints record `channel_key`, `youtube_channel_id` and
+`state_namespace`. Upload claims and generated-file ownership include channel,
+publication date and slot. Artifact selection uses the resolved namespace.
+Minute Mysteries keeps its existing `mystery-state-*`/`mystery-media-*`, queue
+paths and lock paths. Default-only legacy adoption accepts untagged state after
+existing date, slot, fingerprint, artifact and preparation-channel checks; it
+never copies a legacy batch into another channel. Partial/mismatched identities
+fail closed. Loading a legacy checkpoint preserves IDs, uncertain claims and
+ready renders; the next normal write adds identity without resetting progress.
+Non-default state/queue roots are independently addressable for offline tests,
+but dispatch, OAuth, rendering, Telegram and workflow concurrency are unchanged.
+No second channel is enabled. Historical artifacts are not renamed or rewritten.
+
+## Phase 3 operation-local YouTube credentials
+
+Production binds preflight, upload, verification and recovery to one immutable
+channel credential context and reuses its authenticated service for the operation.
+The context checks the configured YouTube ID and credential reference; unverified
+or mismatched contexts fail before insertion/verification. Reconciliation validates
+the same state/channel context without making a YouTube request.
+Minute Mysteries still restores `YOUTUBE_TOKEN_PICKLE_B64` to legacy `token.pickle`
+and uses the existing noninteractive refresh/save behavior and OAuth scope.
+Future non-default contexts address `.credentials/<channel_key>/token.pickle`,
+never the default token. Production dispatch still enables only Minute Mysteries.
+Legacy callers without a context retain their authentication interfaces; Phase 2
+read-only authentication and in-memory refresh are unchanged.
+
+
+### Channel runtime file boundaries
+
+RuntimePaths in config/channels.py resolves narration, clip working copies,
+subtitle and render-audio intermediates under temp/<channel_key>. Production
+passes the same path plan into the existing renderer and idea generator.
+Minute Mysteries retains output/videos and data/idea_memory.json, including
+legacy checkpoint restoration. Future configurations use their own output
+namespace and data/channels/<channel_key>/idea_memory.json; they cannot adopt
+the default memory or output root. No files are moved or deleted.
+Stock footage and background music remain shared assets. Stock cache writes
+are query-locked and atomic; existing cache files are not overwritten. Render
+inputs are independent channel-local copies, never mutable shared cache files.
+Cleanup remains limited to fingerprinted final renders in the channel's output
+root; it does not delete temp files or stock cache assets.
+
+
+### Shared workflow channel selection
+
+The existing production workflow accepts channel_key (default minute_mysteries)
+and passes --channel-key explicitly. Both workflow configuration resolution and
+the runner use resolve_channel_config; only Minute Mysteries is registered.
+Unknown keys fail before production work. The resolved config is passed to
+artifact storage, preparation/current-day recovery, reconciliation credentials,
+generation paths and cleanup without changing process-global channel settings.
+The workflow dynamically selects secrets[credential_reference] and supplies that
+value under the resolved reference to the child Python process. Missing selected
+credentials fail closed; there is no default-secret fallback.
+Concurrency is production-<channel_key>, with cancellation disabled and queue:max
+preserved. GitHub evaluates this group before Python validation; invalid keys may
+get their own group but cannot perform production work. Existing cron-job.org
+payloads may omit channel_key. No GitHub cron or new workflow is introduced.
+When deploying the changed group name, allow any older in-flight production run
+to finish first, since the old global group and new default group are distinct.

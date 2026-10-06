@@ -1,4 +1,5 @@
-import os
+from config.channels import RuntimePaths, MINUTE_MYSTERIES
+from config.settings import BASE_DIR
 
 from engine.uploader.youtube_uploader import upload_generated_video
 from engine.approval.telegram_bot import notify_generated_video
@@ -18,27 +19,29 @@ from datetime import datetime
 
 from config.settings import (
     BASE_CONTENT_TOPIC,
-    TEMP_AUDIO_DIR,
-    TEMP_CLIPS_DIR,
-    OUTPUT_VIDEO_DIR,
     VIDEO_WIDTH,
     VIDEO_HEIGHT,
 )
 
 
-def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True):
+def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True, runtime_paths=None):
     if topic != BASE_CONTENT_TOPIC:
         raise ValueError(f"This automation only supports {BASE_CONTENT_TOPIC!r}.")
 
+    paths = runtime_paths or RuntimePaths(MINUTE_MYSTERIES, BASE_DIR)
+    if publish and paths.channel != MINUTE_MYSTERIES:
+        raise ValueError("Additional-channel publishing is not enabled")
+    paths.prepare()
+
     if idea is None:
-        ideas = generate_video_ideas(topic)
+        ideas = generate_video_ideas(topic, memory_file=paths.memory)
         if not ideas:
             raise ValueError("No mystery ideas were returned; no media was generated.")
         idea = ideas[0]
 
     script = generate_script(idea)
 
-    audio_path = os.path.join(TEMP_AUDIO_DIR, "voice.mp3")
+    audio_path = str(paths.audio / "voice.mp3")
 
     generate_voice(script, audio_path)
 
@@ -47,7 +50,7 @@ def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True):
     all_clips = []
 
     for scene in scenes:
-        clips = download_pexels_clips(scene, TEMP_CLIPS_DIR, max_clips=3)
+        clips = download_pexels_clips(scene, str(paths.clips), max_clips=3)
         all_clips.extend(clips)
 
     subtitles = generate_subtitles(script)
@@ -60,7 +63,7 @@ def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True):
 
     filename = f"{safe_topic}_{timestamp}.mp4"
 
-    output_video_path = os.path.join(OUTPUT_VIDEO_DIR, filename)
+    output_video_path = str(paths.output / filename)
 
     build_short_video(
         clips=all_clips,
@@ -70,6 +73,7 @@ def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True):
         height=VIDEO_HEIGHT,
         subtitles=subtitles,
         music_path=music_path,
+        temp_audiofile=str(paths.audio / (filename + ".render.m4a")),
     )
 
     metadata = generate_metadata(script)

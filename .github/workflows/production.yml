@@ -4,6 +4,11 @@ run-name: Mystery preparation - ${{ inputs.day || 'tomorrow' }}
 on:
   workflow_dispatch:
     inputs:
+      channel_key:
+        description: Registered production channel key
+        required: false
+        type: string
+        default: minute_mysteries
       operation:
         description: Prepare tomorrow or conservatively clean historical READY batches
         required: true
@@ -21,7 +26,7 @@ on:
         default: ''
 
 concurrency:
-  group: mystery-production-state
+  group: production-${{ inputs.channel_key || 'minute_mysteries' }}
   cancel-in-progress: false
   queue: max
 
@@ -49,6 +54,20 @@ jobs:
           node-version: '20'
       - name: Install project dependencies
         run: python -m pip install -r requirements.txt
+      - name: Resolve production channel
+        id: channel
+        env:
+          INPUT_CHANNEL_KEY: ${{ inputs.channel_key || 'minute_mysteries' }}
+        run: |
+          python - <<'PY'
+          import os
+          from config.channels import resolve_channel_config
+          channel = resolve_channel_config(os.environ['INPUT_CHANNEL_KEY'])
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'channel_key={channel.channel_key}\n')
+              output.write(f'credential_reference={channel.credential_reference}\n')
+              output.write(f'youtube_channel_id={channel.youtube_channel_id}\n')
+          PY
       - name: Install FFmpeg for preparation
         if: inputs.operation != 'cleanup'
         run: |
@@ -66,8 +85,9 @@ jobs:
           INPUT_CONFIRMED_NOT_UPLOADED_SLOT: ${{ inputs.confirmed_not_uploaded_slot }}
           OPENAI_API_KEY: ${{ inputs.operation != 'cleanup' && secrets.OPENAI_API_KEY || '' }}
           PEXELS_API_KEY: ${{ inputs.operation != 'cleanup' && secrets.PEXELS_API_KEY || '' }}
-          YOUTUBE_TOKEN_PICKLE_B64: ${{ inputs.operation != 'cleanup' && secrets.YOUTUBE_TOKEN_PICKLE_B64 || '' }}
-          YOUTUBE_CHANNEL_ID: ${{ vars.YOUTUBE_CHANNEL_ID }}
+          SELECTED_YOUTUBE_TOKEN: ${{ inputs.operation != 'cleanup' && secrets[steps.channel.outputs.credential_reference] || '' }}
+          CHANNEL_CREDENTIAL_REFERENCE: ${{ steps.channel.outputs.credential_reference }}
+          YOUTUBE_CHANNEL_ID: ${{ steps.channel.outputs.youtube_channel_id }}
           TELEGRAM_BOT_TOKEN: ${{ inputs.operation != 'cleanup' && secrets.TELEGRAM_BOT_TOKEN || '' }}
           TELEGRAM_CHAT_ID: ${{ inputs.operation != 'cleanup' && secrets.TELEGRAM_CHAT_ID || '' }}
           YOUTUBE_PRIVACY_STATUS: private
@@ -78,10 +98,11 @@ jobs:
           script: |
             const inputs = context.payload.inputs || {};
             const operation = inputs.operation || 'prepare';
-            const args = ['run_actions.py', operation];
+            const args = ['run_actions.py', operation, '--channel-key', inputs.channel_key || 'minute_mysteries'];
             if (inputs.day) args.push('--day', inputs.day);
             if (inputs.confirmed_not_uploaded_slot) {
               args.push('--confirmed-not-uploaded-slot', inputs.confirmed_not_uploaded_slot);
             }
             await exec.exec('python', args, {env: {...process.env,
+              [process.env.CHANNEL_CREDENTIAL_REFERENCE]: process.env.SELECTED_YOUTUBE_TOKEN || '',
               ARTIFACT_MODULE: `${process.env.RUNNER_TEMP}/artifact-client/node_modules/@actions/artifact`}});

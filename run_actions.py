@@ -26,6 +26,8 @@ from engine.scheduling.daily_queue import CheckpointError, DailyQueue, india_now
 from engine.scheduling.cleanup import _eligible, _fingerprint, _validated_target
 from collections import Counter
 
+from config.channels import MINUTE_MYSTERIES, resolve_channel_config, RuntimePaths, channel_identity, validate_channel_identity, valid_slot_owner, validate_channel_scope
+
 WORKFLOW = '.github/workflows/production.yml'
 STATE_PREFIX = 'mystery-state-'
 MEDIA_DAYS = 7
@@ -55,7 +57,12 @@ def generation_policy(day, now, event, explicit_day=False):
     return 'manual_recovery' if explicit_day else 'manual'
 
 
-def validate_state(state, day, generation_run=None):
+def validate_state(state, day, generation_run=None, *, channel=MINUTE_MYSTERIES):
+    try:
+        validate_channel_identity(state, channel, allow_legacy=channel == MINUTE_MYSTERIES)
+        validate_channel_identity(state.get("queue", {}), channel, allow_legacy=channel == MINUTE_MYSTERIES)
+    except ValueError as exc:
+        raise ProductionError(str(exc)) from None
     require(state.get('schema') == 1 and state.get('date') == day.isoformat(),
             'Wrong generation date or unsupported state schema')
     require(isinstance(state.get('generation_run_id'), int), 'Missing generation run identity')
@@ -76,9 +83,12 @@ def validate_state(state, day, generation_run=None):
             records = item.get('generated_files', [])
             require(len(records) == 1, 'Missing media fingerprint')
             record = records[0]
+            require(record.get('channel_key', channel.channel_key) == channel.channel_key and
+                    item.get('channel_key', channel.channel_key) == channel.channel_key, 'Media channel mismatch')
+            require(record.get('artifact_name', '').startswith(channel.artifact_namespace + '-media-'), 'Media artifact channel mismatch')
             name = record.get('filename', '')
             require(re.fullmatch(r'unsolved_mysteries_[0-9]{14}\.mp4', name), 'Invalid media filename')
-            require(record.get('owner') == f'{day}:{item["slot"]}' and record.get('kind') == 'rendered_video',
+            require(valid_slot_owner(record.get("owner"), channel, day, item["slot"]) and record.get('kind') == 'rendered_video',
                     'Media owner mismatch')
             require(isinstance(record.get('artifact_id'), int) and isinstance(record.get('run_id'), int),
                     'Missing explicit media artifact/run identity')
@@ -114,7 +124,8 @@ class StaleStateConflict(ProductionError):
 
 class GitHubArtifacts:
     """REST reads/deletes; official Actions artifact client for uploads in an action context."""
-    def __init__(self):
+    def __init__(self, *, channel=MINUTE_MYSTERIES):
+        self.channel = channel
         self.repo = os.environ['GITHUB_REPOSITORY']
         self.run_id = int(os.environ['GITHUB_RUN_ID'])
         self.branch = os.environ['PRODUCTION_BRANCH']
@@ -188,10 +199,11 @@ class GitHubArtifacts:
         return self.trusted(next(a for a in candidates if a['id'] == head))
 
     def latest(self, day):
-        matches = {a['id']: a for a in self.artifacts() if a['name'].startswith(f'{STATE_PREFIX}{day}-')}
+        validate_channel_scope(getattr(self, "channel", MINUTE_MYSTERIES))
+        matches = {a['id']: a for a in self.artifacts() if a['name'].startswith(f'{getattr(self, "channel", MINUTE_MYSTERIES).artifact_namespace}-state-{day}-')}
         # Directly confirmed uploads can precede their visibility in the REST listing.
         for artifact in getattr(self, '_confirmed_checkpoints', {}).values():
-            if artifact['name'].startswith(f'{STATE_PREFIX}{day}-'):
+            if artifact['name'].startswith(f'{getattr(self, "channel", MINUTE_MYSTERIES).artifact_namespace}-state-{day}-'):
                 matches.setdefault(artifact['id'], artifact)
         return self.newest_checkpoint(list(matches.values()))
 
@@ -259,15 +271,21 @@ const p = JSON.parse(fs.readFileSync(0, 'utf8'));
 
 
 class Production:
-    def __init__(self, store, day, root=BASE_DIR):
+    def __init__(self, store, day, root=BASE_DIR, *, channel=MINUTE_MYSTERIES):
+        validate_channel_scope(channel)
+        self.channel = channel
+        existing_channel = getattr(store, "channel", channel)
+        require(existing_channel == channel, "Artifact store channel mismatch")
+        store.channel = channel
         self.store, self.day = store, day
         self.root = Path(root).resolve()
-        self.scratch = self.root / '.actions-work'
-        self.scratch.mkdir(exist_ok=True)
-        self.output = self.root / 'output' / 'videos'
+        self.scratch = self.root / channel.state_namespace
+        self.scratch.mkdir(parents=True, exist_ok=True)
+        self.runtime_paths = RuntimePaths(channel, self.root)
+        self.output = self.runtime_paths.output
         self.output.mkdir(parents=True, exist_ok=True)
-        self.memory = self.root / 'data' / 'idea_memory.json'
-        self.queue = DailyQueue(self.scratch / 'queues')
+        self.memory = self.runtime_paths.memory
+        self.queue = DailyQueue(self.scratch / 'queues', channel=channel)
         self.latest_id = None
         self.state = None
         self.media = {}
@@ -281,7 +299,7 @@ class Production:
         path = self.scratch / 'restored-state.json'
         self.store.download(artifact, 'state.json', path)
         state = json.loads(path.read_text(encoding='utf-8'))
-        validate_state(state, self.day, generation_run)
+        validate_state(state, self.day, generation_run, channel=self.channel)
         self.state, self.latest_id = state, artifact['id']
         queue = copy.deepcopy(state['queue'])
         for item in queue['videos']:
@@ -295,7 +313,7 @@ class Production:
             self.queue.update(self.day, lambda _: queue)
         finally:
             self.queue.checkpoint = checkpoint
-        self.memory.parent.mkdir(exist_ok=True)
+        self.memory.parent.mkdir(parents=True, exist_ok=True)
         self.memory.write_text(json.dumps(state['idea_memory'], ensure_ascii=False), encoding='utf-8')
         return True
 
@@ -314,9 +332,10 @@ class Production:
             # ZIP does not retain nanoseconds. Restore the recorded time only AFTER verifying bytes.
             os.utime(path, ns=(record['mtime_ns'], record['mtime_ns']))
             refs = Counter(v['video_path'] for v in queue['videos'] if v.get('video_path'))
-            _validated_target(item, self.day, self.output, refs)
+            _validated_target(item, self.day, self.output, refs, channel=self.channel)
 
     def checkpoint(self, day, data):
+        validate_channel_identity(data, self.channel, allow_legacy=self.channel == MINUTE_MYSTERIES)
         require(not self.poisoned and day == self.day, 'State checkpoint is blocked')
         try:
             current = self.store.latest(day)
@@ -329,9 +348,9 @@ class Production:
                 slot = item['slot']
                 if slot not in self.media:
                     refs = Counter(v['video_path'] for v in snapshot['videos'] if v.get('video_path'))
-                    path = _validated_target(item, day, self.output, refs)
+                    path = _validated_target(item, day, self.output, refs, channel=self.channel)
                     require(path.is_file(), 'Generated media missing before checkpoint')
-                    name = f'mystery-media-{day}-{SLOT_NAMES[slot]}-{self.store.run_id}-{uuid.uuid4().hex}'
+                    name = f'{self.channel.artifact_namespace}-media-{day}-{SLOT_NAMES[slot]}-{self.store.run_id}-{uuid.uuid4().hex}'
                     artifact = self.store.upload(name, path, MEDIA_DAYS)
                     record = copy.deepcopy(item['generated_files'][0])
                     record.update(filename=path.name, artifact_id=artifact['id'],
@@ -341,11 +360,11 @@ class Production:
             memory = json.loads(self.memory.read_text(encoding='utf-8')) if self.memory.exists() else {}
             state = {'schema': 1, 'date': str(day), 'generation_run_id': self.state['generation_run_id'] if self.state else self.store.run_id,
                      'privacy_status': self.state['privacy_status'] if self.state else os.getenv('YOUTUBE_PRIVACY_STATUS', 'private'),
-                     'queue': snapshot, 'idea_memory': memory, 'previous_state_id': self.latest_id}
-            validate_state(state, day)
+                     'queue': snapshot, 'idea_memory': memory, 'previous_state_id': self.latest_id, **channel_identity(self.channel)}
+            validate_state(state, day, channel=self.channel)
             path = self.scratch / 'state.json'
             path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
-            name = f'{STATE_PREFIX}{day}-{self.store.run_id}-{uuid.uuid4().hex}'
+            name = f'{self.channel.artifact_namespace}-state-{day}-{self.store.run_id}-{uuid.uuid4().hex}'
             artifact = self.store.upload(name, path, STATE_DAYS)
             confirmed = getattr(self.store, '_confirmed_checkpoints', {})
             confirmed[artifact['id']] = copy.deepcopy(artifact)
@@ -356,18 +375,22 @@ class Production:
             raise
 
     def generate(self, generator=None, *, max_attempts=2, passes=2, complete=True, context=None, before_generation=None, generation_allowed=None):
+        if generator is None:
+            from functools import partial
+            from engine.scheduling.daily_queue import generate_only
+            generator = partial(generate_only, channel=self.channel, runtime_paths=self.runtime_paths)
         self.load(required=False)
         if self.state is None:
             # Preserve the existing idea memory across days, without restoring yesterday's queue.
-            previous = [a for a in self.store.artifacts() if a['name'].startswith(STATE_PREFIX)
-                        and a['name'][len(STATE_PREFIX):len(STATE_PREFIX) + 10] < str(self.day)]
+            previous = [a for a in self.store.artifacts() if a['name'].startswith(self.channel.artifact_namespace + '-state-')
+                        and a['name'][len(self.channel.artifact_namespace + '-state-'):len(self.channel.artifact_namespace + '-state-') + 10] < str(self.day)]
             if previous:
                 latest = self.store.newest_checkpoint(previous)
                 path = self.scratch / 'previous-state.json'
                 self.store.download(latest, 'state.json', path)
                 previous_state = json.loads(path.read_text(encoding='utf-8'))
-                validate_state(previous_state, date.fromisoformat(previous_state['date']))
-                self.memory.parent.mkdir(exist_ok=True)
+                validate_state(previous_state, date.fromisoformat(previous_state['date']), channel=self.channel)
+                self.memory.parent.mkdir(parents=True, exist_ok=True)
                 self.memory.write_text(json.dumps(previous_state['idea_memory']), encoding='utf-8')
         else:
             self.restore_media([v['slot'] for v in self.state['queue']['videos'] if v['generation_status'] == 'ready'
@@ -388,6 +411,7 @@ class Production:
         return {'status': 'ready', 'generation_run_id': self.state['generation_run_id'], 'slots': list(SLOT_NAMES.values())}
 
     def upload(self, slot, generation_run=None, uploader=None, notifier=None, *, catch_up=False):
+        require(self.channel == MINUTE_MYSTERIES, 'Legacy upload is restricted to Minute Mysteries')
         require(slot in UPLOAD_TIMES, 'Select exactly one valid upload slot')
         self.load(generation_run)
         require(self.day == india_now().date(), 'Legacy upload only accepts today in Asia/Kolkata')
@@ -412,6 +436,7 @@ class Production:
         return self._upload_ready_slot(slot, uploader, notifier)
 
     def _upload_ready_slot(self, slot, uploader=None, notifier=None):
+        require(self.channel == MINUTE_MYSTERIES, "Legacy upload is restricted to Minute Mysteries")
         require(self.day == india_now().date(), "Legacy upload only accepts today in Asia/Kolkata")
         item = next(v for v in self.queue.read(self.day)['videos'] if v['slot'] == slot)
         require(item['upload_status'] == 'pending' and not (item.get('youtube') or {}).get('video_id'),
@@ -453,14 +478,16 @@ class Production:
         return result
 
 
-def cleanup_production(store, root=BASE_DIR, now=None):
+def cleanup_production(store, root=BASE_DIR, now=None, *, channel=MINUTE_MYSTERIES):
+    require(getattr(store, "channel", channel) == channel, "Cleanup store channel mismatch")
+    prefix = channel.artifact_namespace + "-state-"
     now = now or india_now()
-    days = sorted({date.fromisoformat(a['name'][len(STATE_PREFIX):len(STATE_PREFIX) + 10])
-                   for a in store.artifacts() if a['name'].startswith(STATE_PREFIX)})
+    days = sorted({date.fromisoformat(a['name'][len(prefix):len(prefix) + 10])
+                   for a in store.artifacts() if a['name'].startswith(prefix)})
     controllers = []
     for day in days:
         if 0 <= (now.date() - day).days < 8:
-            controller = Production(store, day, root)
+            controller = Production(store, day, root, channel=channel)
             controller.load()
             if controller.state['queue'].get('preparation') and controller.state['queue'].get('batch_status') != 'READY':
                 continue
@@ -495,18 +522,23 @@ def cleanup_production(store, root=BASE_DIR, now=None):
     return result
 
 
-def restore_oauth():
-    require(os.environ.get('YOUTUBE_TOKEN_PICKLE_B64'), 'Missing YOUTUBE_TOKEN_PICKLE_B64 secret')
+def restore_oauth(credential_context=None):
+    reference = credential_context.credential_reference if credential_context is not None else "YOUTUBE_TOKEN_PICKLE_B64"
+    require(os.environ.get(reference), 'Missing YOUTUBE_TOKEN_PICKLE_B64 secret')
     try:
-        token = base64.b64decode(os.environ['YOUTUBE_TOKEN_PICKLE_B64'], validate=True)
+        token = base64.b64decode(os.environ[reference], validate=True)
         require(bool(token), 'Empty OAuth token')
-        path = Path(BASE_DIR) / 'token.pickle'
+        path = credential_context.token_file if credential_context is not None else Path(BASE_DIR) / 'token.pickle'
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(token)
         path.chmod(0o600)
         # Existing noninteractive refresh behavior; no new OAuth implementation.
         from engine.uploader.youtube_uploader import get_authenticated_service
-        service = get_authenticated_service()
-        service.close()
+        if credential_context is not None:
+            credential_context.service()
+        else:
+            service = get_authenticated_service()
+            service.close()
     except Exception as exc:
         raise ProductionError(f'YouTube OAuth preflight failed ({type(exc).__name__}); authorize locally and refresh the secret') from None
 
@@ -514,6 +546,7 @@ def restore_oauth():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('operation', choices=['prepare', 'cleanup'])
+    parser.add_argument('--channel-key', default='minute_mysteries', help='Registered production channel key')
     parser.add_argument('--day', default='', help='Target publication date; tomorrow or explicit existing current-day recovery in Asia/Kolkata')
     parser.add_argument("--confirmed-not-uploaded-slot", "--confirm-not-uploaded-slot",
                         dest="confirmed_not_uploaded_slot", default="", choices=["", *UPLOAD_TIMES],
@@ -522,23 +555,31 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
     for name in ('httpx', 'httpcore', 'googleapiclient.discovery_cache'):
         logging.getLogger(name).setLevel(logging.WARNING)
+    credential_context = None
     try:
         require(os.getenv('GITHUB_ACTIONS') == 'true', 'Use the manual production Actions workflow')
         require(os.environ.get('GITHUB_REF') == 'refs/heads/' + os.environ.get('PRODUCTION_BRANCH', ''),
                 'Production operations must run on the default branch')
         require(not args.confirmed_not_uploaded_slot or (args.operation == "prepare" and args.day),
                 "Confirmed-not-uploaded reconciliation requires prepare with an explicit --day")
+        try:
+            channel = resolve_channel_config(args.channel_key or 'minute_mysteries')
+        except ValueError:
+            raise ProductionError('Unknown or invalid production channel key') from None
         started_at = india_now()
-        store = GitHubArtifacts()
+        store = GitHubArtifacts(channel=channel)
         if args.operation == 'prepare':
             from engine.scheduling.preparation import Preparation, target_day
             day = target_day(started_at, args.day)
             require(YOUTUBE_PRIVACY_STATUS == 'private', 'Production preparation requires private privacy')
             require(os.getenv('YOUTUBE_CHANNEL_ID'), 'Missing expected YouTube channel identity')
+            from engine.uploader.youtube_uploader import YouTubeCredentialContext
+            credential_context = YouTubeCredentialContext(channel)
+            credential_context.require_channel(os.environ["YOUTUBE_CHANNEL_ID"])
             def authenticate():
-                restore_oauth()
+                restore_oauth(credential_context)
                 from engine.uploader.youtube_uploader import preparation_preflight
-                preparation_preflight(os.environ['YOUTUBE_CHANNEL_ID'])
+                preparation_preflight(os.environ['YOUTUBE_CHANNEL_ID'], credential_context=credential_context)
             def before_render():
                 require(all(os.getenv(k) for k in ('OPENAI_API_KEY', 'PEXELS_API_KEY')),
                         'Missing generation API secrets')
@@ -548,31 +589,31 @@ def main():
                 today = started_at.astimezone(TZ).date()
                 # Inspect only today's existing checkpoint; never scan arbitrary pending history.
                 if store.latest(today) is not None:
-                    recovery = Preparation(store, today)
+                    recovery = Preparation(store, today, channel=channel)
                     recovery.load()
                     if recovery.recoverable_slots(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'], now=india_now()):
                         recovery_result = recovery.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'],
                             authenticate=authenticate, before_render=before_render,
-                            allow_current_day=True, started_at=started_at)
+                            allow_current_day=True, started_at=started_at, credential_context=credential_context)
                     else:
                         recovery_result = {'status': 'SKIPPED', 'target_date': str(today),
                                            'reason': 'no_safe_future_work'}
-            controller = Preparation(store, day)
+            controller = Preparation(store, day, channel=channel)
             reconciliation = None
             if args.confirmed_not_uploaded_slot:
                 reconciliation = controller.reconcile_not_uploaded(args.confirmed_not_uploaded_slot,
-                    expected_channel=os.environ["YOUTUBE_CHANNEL_ID"])
+                    expected_channel=os.environ["YOUTUBE_CHANNEL_ID"], credential_context=credential_context)
             result = controller.prepare(expected_channel=os.environ['YOUTUBE_CHANNEL_ID'],
                                         authenticate=authenticate, before_render=before_render,
-                                        allow_current_day=bool(args.day), started_at=started_at)
+                                        allow_current_day=bool(args.day), started_at=started_at, credential_context=credential_context)
             if reconciliation is not None:
                 result["reconciliation"] = reconciliation
             if recovery_result is not None:
                 result['current_day_recovery'] = recovery_result
             if result['status'] == 'READY':
-                result['cleanup'] = cleanup_production(store)
+                result['cleanup'] = cleanup_production(store, channel=channel)
         else:
-            result = cleanup_production(store)
+            result = cleanup_production(store, channel=channel)
         recovery = result.get('current_day_recovery', {})
         incomplete = args.operation == 'prepare' and (
             (result['status'] != 'READY' and not result.get('verification_pending')) or
@@ -597,6 +638,10 @@ def main():
             with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:
                 stream.write(f'Production FAILED: {message}\n')
         return 1
+
+    finally:
+        if credential_context is not None:
+            credential_context.close()
 
 
 if __name__ == '__main__':

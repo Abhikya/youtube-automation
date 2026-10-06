@@ -1,7 +1,10 @@
 import os
+import re
+import shutil
+import tempfile
+from filelock import FileLock
 import requests
 from dotenv import load_dotenv
-import re
 from config.settings import CLIPS_LIBRARY_DIR
 
 
@@ -23,54 +26,35 @@ def download_pexels_clips(query, output_folder, max_clips=1):
 
     safe_query = get_safe_filename(query)
 
-    cached_files = []
-
-    # 🔥 STEP 1: Check cache
-    for i in range(max_clips):
-        cache_path = os.path.join(CLIPS_LIBRARY_DIR, f"{safe_query}_{i}.mp4")
-        if os.path.exists(cache_path):
-            cached_files.append(cache_path)
-
-    # If enough cached clips → return immediately
-    if len(cached_files) == max_clips:
-        print(f"Using cached clips for: {query}")
-        return cached_files
-
-    # 🔥 STEP 2: Otherwise download
-    params = {
-        "query": query,
-        "per_page": max_clips,
-        "orientation": "portrait"
-    }
-
-    response = requests.get(PEXELS_URL, headers=headers, params=params, timeout=(15, 90))
-    response.raise_for_status()
-    data = response.json()
-
-    clips = []
-
-    for i, video in enumerate(data.get("videos", [])):
-
-        video_url = video["video_files"][0]["link"]
-
-        file_name = f"{safe_query}_{i}.mp4"
-
-        cache_path = os.path.join(CLIPS_LIBRARY_DIR, file_name)
-        output_path = os.path.join(output_folder, file_name)
-
-        # Download clip
-        video_response = requests.get(video_url, timeout=(15, 180))
-        video_response.raise_for_status()
-        video_data = video_response.content
-
-        # Save to cache
-        with open(cache_path, "wb") as f:
-            f.write(video_data)
-
-        # Copy to temp folder
-        with open(output_path, "wb") as f:
-            f.write(video_data)
-
-        clips.append(output_path)
-
-    return clips
+    os.makedirs(output_folder, exist_ok=True)
+    # Cache files are read-only inputs. Serialize writers and publish complete bytes.
+    with FileLock(os.path.join(CLIPS_LIBRARY_DIR, safe_query + ".lock"), timeout=600):
+        cache_paths = [os.path.join(CLIPS_LIBRARY_DIR, f"{safe_query}_{i}.mp4") for i in range(max_clips)]
+        if not all(os.path.isfile(path) for path in cache_paths):
+            response = requests.get(PEXELS_URL, headers=headers,
+                params={"query": query, "per_page": max_clips, "orientation": "portrait"}, timeout=(15, 90))
+            response.raise_for_status()
+            cache_paths = []
+            for i, video in enumerate(response.json().get("videos", [])):
+                cache_path = os.path.join(CLIPS_LIBRARY_DIR, f"{safe_query}_{i}.mp4")
+                if not os.path.isfile(cache_path):
+                    downloaded = requests.get(video["video_files"][0]["link"], timeout=(15, 180))
+                    downloaded.raise_for_status()
+                    temporary = None
+                    try:
+                        with tempfile.NamedTemporaryFile(dir=CLIPS_LIBRARY_DIR, delete=False) as stream:
+                            temporary = stream.name
+                            stream.write(downloaded.content)
+                        os.replace(temporary, cache_path)
+                    finally:
+                        if temporary and os.path.exists(temporary):
+                            os.unlink(temporary)
+                cache_paths.append(cache_path)
+        clips = []
+        for cache_path in cache_paths:
+            working = os.path.join(output_folder, os.path.basename(cache_path))
+            if os.path.realpath(working) == os.path.realpath(cache_path):
+                raise ValueError("Working clips must be separate from shared cache")
+            shutil.copyfile(cache_path, working)
+            clips.append(working)
+        return clips
