@@ -1,0 +1,847 @@
+{
+  "experiment_name": "hook_structure",
+  "experiment_version": "v1",
+  "assignment_seed": 4765339750973678418,
+  "assigned_at": "2026-10-05T19:18:37.242657+00:00",
+  "assignment_locked": true,
+  "scope": "local_script_candidates_only",
+  "candidates": [
+    {
+      "pair_id": "pair_01",
+      "category": "cosmic_signal",
+      "selected_idea": "The Wow! Signal: the origin of the radio signal detected in 1977 remains unresolved.",
+      "variant": "BASELINE",
+      "planned_slot": "10:00",
+      "planned_date": "2026-10-08",
+      "script_hash": "e6374819a53fc83652c879f42088623b8c5fa9269d2d3e446c63021e79f7ff40",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In 1977, the Big Ear telescope recorded an unexplained radio signal for 72 seconds. Known as the Wow! Signal, it drew attention because of its unusual strength and narrow frequency range. The 72 seconds describe the observation window, not a confirmed lifespan for the source. Its origin remains unresolved. The recording does not establish contact with extraterrestrial intelligence or identify a particular star as its source. One unusual observation cannot settle that question. What produced the signal remains unresolved in this account.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Removed unsupported star-cluster attribution and confirmed non-Earth origin; distinguished observation window from signal lifespan.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "In 1977, the Big Ear telescope recorded an unexplained radio signal for 72 seconds.",
+      "word_count": 82,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null,
+      "previous_script_hash": "93fbab69acd60ed6a3007c16bc9149066a3ab28c84e425c5fa16e26530802b37",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 41.0,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://www.bigear.org/Wow30th/wow30th.htm",
+        "https://www.bigear.org/faq.htm"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "rendered_file": "output/videos/hook_structure_v1/pair_01_baseline.mp4",
+      "render_sha256": "1750aa9ad29e7c9df27cbf0089e261eb32cc45f6b078cb1ac68fd004235ecd72",
+      "duration": 35.57,
+      "width": 1080,
+      "height": 1920,
+      "render_status": "READY_FOR_PUBLICATION_REVIEW",
+      "expected_publish_at_utc": "2026-10-08T04:30:00Z"
+    },
+    {
+      "pair_id": "pair_01",
+      "category": "cosmic_signal",
+      "selected_idea": "The Lorimer burst: the origin of the fast radio burst first reported in 2007 and uncertainties about its source.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "14:00",
+      "planned_date": "2026-10-08",
+      "script_hash": "927d15586db14cc23bd3b1376409bd46c34ecb86d6e8f85eec09a6a36bc5a891",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "A brief radio burst appeared in observations made with the Parkes telescope in 2001. Researchers identified it in archived data and reported the discovery in 2007. Known as the Lorimer burst, it lasted less than five milliseconds. The original analysis supported a source beyond our galaxy, but did not identify the object that produced it. Suggested explanations were hypotheses, not a confirmed answer. No further bursts appeared during the follow-up observations described in that report. The precise source remained unresolved.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Separated 2001 observation from 2007 discovery report; removed definite distance and unsupported source mechanism.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "source_baseline_script": "In 2001, a brief radio burst appeared in observations made with the Parkes telescope. Researchers identified it in archived data and reported the discovery in 2007. Known as the Lorimer burst, it lasted less than five milliseconds. The original analysis supported a source beyond our galaxy, but did not identify the object that produced it. Suggested explanations were hypotheses, not a confirmed answer. No further bursts appeared during the follow-up observations described in that report. The precise source remained unresolved.",
+      "first_sentence": "A brief radio burst appeared in observations made with the Parkes telescope in 2001.",
+      "word_count": 80,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "2001": 1
+        },
+        "numeric_facts_experimental": {
+          "2001": 1
+        },
+        "preserved_token_counts": {
+          "in": 2,
+          "2001": 1,
+          "a": 1,
+          "brief": 1,
+          "radio": 1,
+          "burst": 1,
+          "appeared": 1,
+          "observations": 1,
+          "made": 1,
+          "with": 1,
+          "the": 1,
+          "parkes": 1,
+          "telescope": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "2001"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "2001"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true,
+      "previous_script_hash": "37c04abb6080c9a1dd14ad0d838fdefc30c858aca4ceaeb6df347b9173b41dcd",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 40.0,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://arxiv.org/abs/0709.4301"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "opening_editorial_review": {
+        "facts_preserved": true,
+        "certainty_preserved": true,
+        "emotional_intensity_preserved": true,
+        "order_only": true,
+        "status": "APPROVED"
+      },
+      "rendered_file": "output/videos/hook_structure_v1/pair_01_hook_event_first_v1.mp4",
+      "render_sha256": "dca83fe80d509d850ab3282846a5b5a29c58696f8c9c91cac676dbf59bfbd6a0",
+      "duration": 32.66,
+      "width": 1080,
+      "height": 1920,
+      "render_status": "READY_FOR_PUBLICATION_REVIEW",
+      "expected_publish_at_utc": "2026-10-08T08:30:00Z"
+    },
+    {
+      "pair_id": "pair_02",
+      "category": "cosmic_signal",
+      "selected_idea": "Tabby’s Star: unusual brightness dips and proposed explanations; do not present alien speculation as evidence.",
+      "variant": "BASELINE",
+      "planned_slot": "14:00",
+      "planned_date": "2026-10-10",
+      "script_hash": "12ed2661efa4c59fa33e9439266cdc4e0bae8c3cc31a9fd2307b0948657ba697",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In 2015, researchers reported unusual brightness dips in Tabby's Star, reaching about 20 percent. Unlike the regular dimming expected from a simple planetary transit, the recorded dips varied in shape and timing. Later observations supported dust as an explanation for some of the dimming, rather than ruling it out. That still leaves questions about the material and the processes involved. A dip in brightness alone cannot identify what crossed our line of sight. The observations document unusual changes in brightness; they do not identify a single, confirmed cause for every dip.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Replaced curiosity-first setup with documented report context to restore pair contrast; removed claim dust was ruled out.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "In 2015, researchers reported unusual brightness dips in Tabby's Star, reaching about 20 percent.",
+      "word_count": 91,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null,
+      "previous_script_hash": "214d04d1bad92affc51e7f3487afbc162bfe715a45c83bebfb2da473e70ff98f",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 45.5,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://arxiv.org/abs/1509.03622",
+        "https://www.jpl.nasa.gov/news/mysterious-dimming-of-tabbys-star-may-be-caused-by-dust/"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "expected_publish_at_utc": "2026-10-10T08:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_02",
+      "category": "cosmic_signal",
+      "selected_idea": "HD 139139: unusual dimming events reported in 2019 and the uncertainty surrounding their explanation.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "10:00",
+      "planned_date": "2026-10-10",
+      "script_hash": "fd1f304db2d04667fee878167803a54060790b2b9ffc6e377af1d5539ac0db5f",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "28 unexplained dimming events in observations of HD 139139 were reported in 2019. The events appeared during an 87-day observing period, without a clear repeating schedule. Their shapes resembled planetary transits, but the researchers could not explain the full pattern with the scenarios they examined. A transit-like shape alone does not identify the object responsible. Nor does an apparently irregular pattern prove that the events were truly random. The report documented a puzzle in the measured light, not a confirmed explanation of its source.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Removed Sun comparison, alien attribution and absolute randomness; retained report-year distinction.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "source_baseline_script": "In 2019, 28 unexplained dimming events in observations of HD 139139 were reported. The events appeared during an 87-day observing period, without a clear repeating schedule. Their shapes resembled planetary transits, but the researchers could not explain the full pattern with the scenarios they examined. A transit-like shape alone does not identify the object responsible. Nor does an apparently irregular pattern prove that the events were truly random. The report documented a puzzle in the measured light, not a confirmed explanation of its source.",
+      "first_sentence": "28 unexplained dimming events in observations of HD 139139 were reported in 2019.",
+      "word_count": 84,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "2019": 1,
+          "28": 1,
+          "139139": 1
+        },
+        "numeric_facts_experimental": {
+          "28": 1,
+          "139139": 1,
+          "2019": 1
+        },
+        "preserved_token_counts": {
+          "in": 2,
+          "2019": 1,
+          "28": 1,
+          "unexplained": 1,
+          "dimming": 1,
+          "events": 1,
+          "observations": 1,
+          "of": 1,
+          "hd": 1,
+          "139139": 1,
+          "were": 1,
+          "reported": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "2019"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "2019"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true,
+      "previous_script_hash": "4a6ed7c33ffcac2d798643e1bd165c82ad3558c24bebdf8ae3c667e15d2e549f",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 42.0,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://arxiv.org/abs/1906.11268"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "opening_editorial_review": {
+        "facts_preserved": true,
+        "certainty_preserved": true,
+        "emotional_intensity_preserved": true,
+        "order_only": true,
+        "status": "APPROVED"
+      },
+      "expected_publish_at_utc": "2026-10-10T04:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_03",
+      "category": "maritime",
+      "selected_idea": "MV Joyita: the vessel found abandoned in 1955 and the unresolved fate of its occupants.",
+      "variant": "BASELINE",
+      "planned_slot": "14:00",
+      "planned_date": "2026-10-09",
+      "script_hash": "f99dc4ce6cd4790f81f017066ea173b502b381bd372bccf88c9b406be2a74476",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In 1955, the MV Joyita was found drifting in the Pacific, completely abandoned. The vessel had set out from Apia for the Tokelau Islands with 25 passengers and crew aboard. When it was discovered near Fiji, none of them was on board. The ship was waterlogged, yet still afloat. That does not establish why the people left or what happened to them afterward. An official inquiry investigated the disappearance. The recovered vessel offered clues, but it could not reveal the missing people's final movements or establish their fate.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Removed unsourced radio and personal-item details; replaced seaworthy with afloat; distinguished passengers and crew.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "In 1955, the MV Joyita was found drifting in the Pacific, completely abandoned.",
+      "word_count": 88,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null,
+      "previous_script_hash": "82d2ce58a89065d412352c1dec42e4e0880eac76c38788010e612ca7b1cd208a",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 44.0,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://gazette.howison.co.nz/nzg/1956/issue/1/page/7",
+        "https://www.matauala.org.nz/joyita-unsolved-mystery"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "expected_publish_at_utc": "2026-10-09T08:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_03",
+      "category": "maritime",
+      "selected_idea": "Mary Celeste: the abandoned merchant vessel discovered in 1872 and the unresolved fate of its occupants.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "19:00",
+      "planned_date": "2026-10-09",
+      "script_hash": "0073d9751ee4ee902598fac0dfb0b71c42ee3a3814fd1d10598f508ca3421046",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "The merchant ship Mary Celeste was found drifting alone in the Atlantic in 1872, with nobody aboard. The lifeboat was missing, suggesting they abandoned ship, but why? The captain, his wife, their daughter and seven crew members had been aboard when the voyage began. The recovered ship showed some damage and water inside, but no obvious signs of violence. Those findings do not establish what prompted the departure. To this day, the fate of the people remains unresolved. The ship survived; the missing people left no confirmed account of their departure.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Removed unsupported storm-overboard claim and intact-cargo absolute; retained missing-boat uncertainty and human context.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "The merchant ship Mary Celeste was found drifting alone in the Atlantic in 1872, with nobody aboard.",
+      "word_count": 91,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": "In 1872, the merchant ship Mary Celeste was found drifting alone in the Atlantic, with nobody aboard. The lifeboat was missing, suggesting they abandoned ship, but why? The captain, his wife, their daughter and seven crew members had been aboard when the voyage began. The recovered ship showed some damage and water inside, but no obvious signs of violence. Those findings do not establish what prompted the departure. To this day, the fate of the people remains unresolved. The ship survived; the missing people left no confirmed account of their departure.",
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1872": 1
+        },
+        "numeric_facts_experimental": {
+          "1872": 1
+        },
+        "preserved_token_counts": {
+          "in": 2,
+          "1872": 1,
+          "the": 2,
+          "merchant": 1,
+          "ship": 1,
+          "mary": 1,
+          "celeste": 1,
+          "was": 1,
+          "found": 1,
+          "drifting": 1,
+          "alone": 1,
+          "atlantic": 1,
+          "with": 1,
+          "nobody": 1,
+          "aboard": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "1872"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "1872"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true,
+      "previous_script_hash": "93ab80790a68640bab014bf711a711ae912911e561785227241cdc6b77020a3b",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 45.5,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://www.rmg.co.uk/stories/maritime-history/mystery-mary-celeste"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "opening_editorial_review": {
+        "facts_preserved": true,
+        "certainty_preserved": true,
+        "emotional_intensity_preserved": true,
+        "order_only": true,
+        "status": "APPROVED"
+      },
+      "expected_publish_at_utc": "2026-10-09T13:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_04",
+      "category": "maritime",
+      "selected_idea": "USS Cyclops: the naval vessel lost in 1918; distinguish documented disappearance from speculative explanations.",
+      "variant": "BASELINE",
+      "planned_slot": "19:00",
+      "planned_date": "2026-10-11",
+      "script_hash": "572cbbb7ad1625d13d2dc7d93327a2a458683070963496e43d6ee9cb3bf0df1b",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In March 1918, the USS Cyclops disappeared after leaving Barbados for Baltimore. The naval vessel had been returning from Brazil with a cargo of manganese ore. It never reached its destination. Searches did not establish what happened to the ship and the people aboard. Suggestions involving bad weather, cargo or structural problems remain explanations to examine, not a confirmed account of the loss. Without a confirmed wreck, the evidence cannot establish how the ship was lost. The central question remains what prevented the Cyclops from completing that voyage.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Removed disputed head count, crew-only wording, Bermuda Triangle framing and unsupported absolute distress claim.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "In March 1918, the USS Cyclops disappeared after leaving Barbados for Baltimore.",
+      "word_count": 88,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null,
+      "previous_script_hash": "04e2ab1f19c476f794f4f6461d55df8e136b4948a004fcb62228923621d2657d",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 44.0,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://www.history.navy.mil/our-collections/photography/us-navy-ships/alphabetical-listing/c/uss-cyclops--1910-1918--0.html",
+        "https://www.history.navy.mil/content/history/nhhc/about-us/leadership/director/directors-corner/h-grams/h-gram-016/h-016-4.html"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "expected_publish_at_utc": "2026-10-11T13:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_04",
+      "category": "maritime",
+      "selected_idea": "SS Waratah: the passenger steamer lost in 1909; distinguish documented disappearance from speculative explanations.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "14:00",
+      "planned_date": "2026-10-11",
+      "script_hash": "935b8d14d3664e192e9b7ded933f07181533170ea4751d2c70088b26e0749ca3",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "The passenger steamer SS Waratah disappeared on a voyage from Durban to Cape Town in 1909. There were 211 passengers and crew aboard. The ship did not arrive at its destination, and searches failed to locate a confirmed wreck. What happened next remains unresolved. Suggestions involving rough seas, stability or mechanical trouble are proposed explanations, not a proven account. The missing wreck limits what investigators can establish. The ship had crossed oceans before, but this part of its journey ended without a confirmed account of its loss.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Corrected disappearance voyage to Durban-Cape Town; removed piracy and definite cyclone attribution.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "The passenger steamer SS Waratah disappeared on a voyage from Durban to Cape Town in 1909.",
+      "word_count": 87,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": "In 1909, the passenger steamer SS Waratah disappeared on a voyage from Durban to Cape Town. There were 211 passengers and crew aboard. The ship did not arrive at its destination, and searches failed to locate a confirmed wreck. What happened next remains unresolved. Suggestions involving rough seas, stability or mechanical trouble are proposed explanations, not a proven account. The missing wreck limits what investigators can establish. The ship had crossed oceans before, but this part of its journey ended without a confirmed account of its loss.",
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1909": 1
+        },
+        "numeric_facts_experimental": {
+          "1909": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "1909": 1,
+          "the": 1,
+          "passenger": 1,
+          "steamer": 1,
+          "ss": 1,
+          "waratah": 1,
+          "disappeared": 1,
+          "on": 1,
+          "a": 1,
+          "voyage": 1,
+          "from": 1,
+          "durban": 1,
+          "to": 1,
+          "cape": 1,
+          "town": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "1909"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "1909"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true,
+      "previous_script_hash": "a1ccac0b5afdb74de00ea303a5718515460479f033decad29d959a271b8712b7",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 43.5,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://www.slsa.sa.gov.au/australias-titanic-sinking-of-ss-waratah"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "opening_editorial_review": {
+        "facts_preserved": true,
+        "certainty_preserved": true,
+        "emotional_intensity_preserved": true,
+        "order_only": true,
+        "status": "APPROVED"
+      },
+      "expected_publish_at_utc": "2026-10-11T08:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_05",
+      "category": "missing_person",
+      "selected_idea": "The Springfield Three: the unresolved disappearance of three women in 1992; avoid invented suspects or evidence.",
+      "variant": "BASELINE",
+      "planned_slot": "19:00",
+      "planned_date": "2026-10-08",
+      "script_hash": "7686798c88b47e8e1fa2e540d2fb40249d6f311dc3ef77c675aaeeda63aa2d37",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "On June 7, 1992, Sherrill Levitt, Suzanne Streeter and Stacy McCall disappeared from a home in Springfield, Missouri. The three women have not been heard from or seen since. Their case became known as the Springfield Three. The FBI places the disappearance within the early morning hours, rather than establishing a precise moment. That timeline does not explain how they went missing or who was responsible. Their families were left without answers. The women's whereabouts remain unresolved, and the known timeline does not establish an explanation for their disappearance.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Corrected night wording to early morning; removed absolute no-evidence/no-witness assertions and voluntary-departure speculation.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "On June 7, 1992, Sherrill Levitt, Suzanne Streeter and Stacy McCall disappeared from a home in Springfield, Missouri.",
+      "word_count": 89,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null,
+      "previous_script_hash": "7ac8d716cdfadfffae0f3b25bb6698cd02e82dccc48e39c72594160619c0860e",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 44.5,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://www.fbi.gov/wanted/vicap/missing-persons/the-springfield-three---springfield-missouri/"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "expected_publish_at_utc": "2026-10-08T13:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_05",
+      "category": "missing_person",
+      "selected_idea": "The Beaumont children: the unresolved disappearance from Glenelg Beach in 1966; avoid invented suspects or evidence.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "10:00",
+      "planned_date": "2026-10-09",
+      "script_hash": "703799536cb847eeb706720e24d39afcdd5503707765131f68bb2b502977b02c",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "Three siblings disappeared after visiting Glenelg Beach, Australia, in 1966. Jane, Arnna and Grant Beaumont went to the beach on January 26. Despite extensive searches and investigations, their fate remains unresolved. Police have investigated their disappearance as a suspected abduction, but suspicion is not a confirmed account of what happened. Investigators pursued witness reports and other leads without resolving the case. What happened after the beach visit remains unknown in the established account. The children's disappearance left their family without answers.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Removed no-clues absolute and chilling framing; distinguished police suspicion from established fate.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "source_baseline_script": "In 1966, three siblings disappeared after visiting Glenelg Beach, Australia. Jane, Arnna and Grant Beaumont went to the beach on January 26. Despite extensive searches and investigations, their fate remains unresolved. Police have investigated their disappearance as a suspected abduction, but suspicion is not a confirmed account of what happened. Investigators pursued witness reports and other leads without resolving the case. What happened after the beach visit remains unknown in the established account. The children's disappearance left their family without answers.",
+      "first_sentence": "Three siblings disappeared after visiting Glenelg Beach, Australia, in 1966.",
+      "word_count": 81,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1966": 1
+        },
+        "numeric_facts_experimental": {
+          "1966": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "1966": 1,
+          "three": 1,
+          "siblings": 1,
+          "disappeared": 1,
+          "after": 1,
+          "visiting": 1,
+          "glenelg": 1,
+          "beach": 1,
+          "australia": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "1966"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "1966"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true,
+      "previous_script_hash": "6185cdf8448734bbbcc1083b229788b6a3bea023da53af2ff2535837ff08db00",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 40.5,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://crimestopperssa.com.au/media-releases/case-profile-jane-arnna-grant-beaumont/"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "opening_editorial_review": {
+        "facts_preserved": true,
+        "certainty_preserved": true,
+        "emotional_intensity_preserved": true,
+        "order_only": true,
+        "status": "APPROVED"
+      },
+      "expected_publish_at_utc": "2026-10-09T04:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_06",
+      "category": "missing_person",
+      "selected_idea": "The disappearance of Paula Jean Welden in Vermont in 1946; distinguish documented information from unproven theories.",
+      "variant": "BASELINE",
+      "planned_slot": "10:00",
+      "planned_date": "2026-10-11",
+      "script_hash": "e2e47dbf4910e00f2761e19fe3e38bf59e3b9e1f2045b5f4c2bea2aa37961111",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "In 1946, college student Paula Jean Welden disappeared after setting out toward Vermont's Long Trail. She was last seen on the afternoon of December 1. Several hikers reported seeing her along the trail near Glastenbury Mountain. Despite extensive searches, her disappearance remained unresolved. Those reports do not establish exactly where she went afterward or what happened to her. The last sightings offered a starting point, but not a confirmed account of her final movements. Her family was left without answers, and the known evidence does not resolve her disappearance.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Removed unsupported dorm-departure claim; used police timeline and attributed hiker sightings.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "In 1946, college student Paula Jean Welden disappeared after setting out toward Vermont's Long Trail.",
+      "word_count": 89,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": null,
+      "previous_script_hash": "90ddd5eb10f1f58289edc2ac4ffae44b71fece16a67d4ad01721731860b4c426",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 44.5,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://vsp.vermont.gov/unsolved/missing/c/welden",
+        "https://leb.fbi.gov/file-repository/archives/february-1947.pdf"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "expected_publish_at_utc": "2026-10-11T04:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    },
+    {
+      "pair_id": "pair_06",
+      "category": "missing_person",
+      "selected_idea": "The Flannan Isles lighthouse keepers: the unexplained disappearance in 1900; do not invent log entries or supernatural evidence.",
+      "variant": "HOOK_EVENT_FIRST_V1",
+      "planned_slot": "19:00",
+      "planned_date": "2026-10-10",
+      "script_hash": "6bb222b3458f919137fb9b0a3f9d3ab3410849b2b79b5d6298e92d5f67ee01a3",
+      "youtube_video_id": null,
+      "published_at": null,
+      "script": "Three lighthouse keepers disappeared from the Flannan Isles, Scotland, in December 1900. When the relief crew arrived, the men were gone. Damage around the western landing showed that heavy seas had struck the island. The superintendent concluded that a large wave had probably swept the keepers away. That was an investigation finding, not an eyewitness account of their final moments. The precise sequence remains uncertain. The damage offered an explanation to investigate, but no witness could describe exactly what happened to the three men.",
+      "review_status": "APPROVED",
+      "review_notes": [
+        "Removed operational-light claim and no-evidence absolute; attributed probable wave explanation to superintendent.",
+        "Editorial script approval only; not publication authorization. Existing channel repeat-topic risk is not assessed by this text review."
+      ],
+      "first_sentence": "Three lighthouse keepers disappeared from the Flannan Isles, Scotland, in December 1900.",
+      "word_count": 84,
+      "expected_duration_seconds": 40,
+      "actual_duration_seconds": null,
+      "source_baseline_script": "In December 1900, three lighthouse keepers disappeared from the Flannan Isles, Scotland. When the relief crew arrived, the men were gone. Damage around the western landing showed that heavy seas had struck the island. The superintendent concluded that a large wave had probably swept the keepers away. That was an investigation finding, not an eyewitness account of their final moments. The precise sequence remains uncertain. The damage offered an explanation to investigate, but no witness could describe exactly what happened to the three men.",
+      "opening_review": {
+        "flags": [],
+        "removed_tokens": [],
+        "added_tokens": [],
+        "removed_date_tokens": [],
+        "removed_entity_location_candidates": [],
+        "numeric_facts_baseline": {
+          "1900": 1
+        },
+        "numeric_facts_experimental": {
+          "1900": 1
+        },
+        "preserved_token_counts": {
+          "in": 1,
+          "december": 1,
+          "1900": 1,
+          "three": 1,
+          "lighthouse": 1,
+          "keepers": 1,
+          "disappeared": 1,
+          "from": 1,
+          "the": 1,
+          "flannan": 1,
+          "isles": 1,
+          "scotland": 1
+        },
+        "token_edits": [
+          {
+            "operation": "delete",
+            "baseline_tokens": [
+              "In",
+              "December",
+              "1900"
+            ],
+            "experimental_tokens": []
+          },
+          {
+            "operation": "insert",
+            "baseline_tokens": [],
+            "experimental_tokens": [
+              "in",
+              "December",
+              "1900"
+            ]
+          }
+        ],
+        "word_count_difference": 0,
+        "human_review_required": true,
+        "semantic_equivalence": "NOT_AUTOMATICALLY_VERIFIED",
+        "structural_isolation": "REORDER_ONLY_CANDIDATE"
+      },
+      "remainder_identical": true,
+      "previous_script_hash": "ddb1c61de0ed3105b843321c5dfd0cf76d6655712016acf0a5cf21b50a1729c0",
+      "duration_estimate": {
+        "method": "word_count / 2 words per second; narration estimate only",
+        "seconds": 42.0,
+        "rendered": false
+      },
+      "factual_review_sources": [
+        "https://www.nlb.org.uk/history/flannan-isles/"
+      ],
+      "revision_review": {
+        "prior_script_changed": true,
+        "reason": "Correct factual defects and remove unsupported speculation before isolating opening order.",
+        "approval_scope": "script wording, uncertainty, victim sensitivity and opening isolation",
+        "remainder_preservation": "Corrected source remainder is identical in experimental script; factual corrections may change the prior draft remainder."
+      },
+      "opening_editorial_review": {
+        "facts_preserved": true,
+        "certainty_preserved": true,
+        "emotional_intensity_preserved": true,
+        "order_only": true,
+        "status": "APPROVED"
+      },
+      "expected_publish_at_utc": "2026-10-10T13:30:00Z",
+      "render_status": "NOT_RENDERED_YET"
+    }
+  ]
+}

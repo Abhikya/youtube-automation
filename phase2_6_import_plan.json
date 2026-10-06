@@ -1,0 +1,287 @@
+{
+  "channel": "4491252f-3db8-5466-891b-a15a7d3a7271",
+  "destination_assumption": "Provided offline inventory only; completeness not verified against Neon",
+  "errors": [],
+  "excluded": {
+    "learning_contexts": "ALL",
+    "metric_candidates": 4,
+    "october_1_observations": "ALL",
+    "skipped_sources": [
+      "10 idea suggestions are not completed generations",
+      "30 stock clips plus 30 identical temporary copies are not final outputs",
+      "shared voice.mp3 has no immutable historical association",
+      "test fixtures and documentation examples",
+      "credential files excluded without reading contents"
+    ],
+    "unresolved_sources": [
+      "Three October 1 YouTube IDs and local generation/upload records",
+      "Exact Studio observation timestamp/timezone for all four",
+      "Other rendered MP4 lacks explicit video linkage",
+      "Remote artifacts not inspected; no external calls",
+      "Current remote privacy not verified"
+    ]
+  },
+  "input_sha256": "c1457a0d2fd9b69c53983e3078e9a76dbd9a0c3a4e476ca61f4f7fe1e2e84c86",
+  "live_database_contacted": false,
+  "live_execution_supported": false,
+  "live_import_blockers": [
+    "No live destination inspection; INSERT actions are conditional",
+    "Preview administrative timestamps must be resolved before live import; no timestamps changed or invented here"
+  ],
+  "mode": "DRY_RUN_ONLY",
+  "plan_valid": true,
+  "rows": [
+    {
+      "action": "INSERT",
+      "channel": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "conflict_status": "NONE",
+      "dependencies": [],
+      "identity_semantics": "Proposed storage identity, not recovered historical identity",
+      "key_fields": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "display_name": "Minute Mysteries"
+      },
+      "record": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "configuration_version": "preview-v1",
+        "content_config": {},
+        "created_at": "2026-10-02T08:19:48Z",
+        "display_name": "Minute Mysteries",
+        "identity": "Owner-confirmed channel represented by this preview",
+        "metadata_strategy": {},
+        "provenance": {
+          "captured_at": "2026-10-02T08:19:48Z",
+          "notes": "captured_at is audit provenance time, not metric observation time. Observed date only: 2026-10-02.",
+          "source": "owner-confirmed YouTube Studio evidence",
+          "source_record_id": "ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c",
+          "source_run_id": null
+        },
+        "updated_at": "2026-10-02T08:19:48Z",
+        "youtube_channel_id": null
+      },
+      "source": "owner-confirmed YouTube Studio evidence",
+      "source_identity": "ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c",
+      "storage_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "table": "channel_profiles"
+    },
+    {
+      "action": "INSERT",
+      "channel": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "conflict_status": "NONE",
+      "dependencies": [
+        {
+          "storage_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+          "table": "channel_profiles"
+        }
+      ],
+      "identity_semantics": "Proposed storage identity, not recovered historical identity",
+      "key_fields": {
+        "generated_at": "2026-09-14T14:04:34.207231+05:30",
+        "generation_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+        "title": "The Tunguska Enigma"
+      },
+      "record": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "context_reference": null,
+        "context_version": null,
+        "description": "In 1908, an extraordinary event shook the remote forests of Siberia as a massive explosion flattened an area of 2,000 square kilometers. Known as the Tunguska event, this phenomenon occurred without leaving a crater. Scientists attribute it to a meteoroid or comet exploding in the atmosphere, unleashing energy 1,000 times greater than that of the Hiroshima bomb. However, the absence of solid fragments raises questions. While some propose theories—ranging from a comet to a mini black hole or even alien technology—these remain unproven. The Tunguska event endures as one of history’s greatest mysteries, with the true cause shrouded in uncertainty. What truly transpired over Siberia? We still don’t know.",
+        "generated_at": "2026-09-14T14:04:34.207231+05:30",
+        "generation_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+        "hashtags": [
+          "#Tunguska",
+          "#Mystery",
+          "#Siberia",
+          "#UFOtheory",
+          "#ScientificEnigma",
+          "#HistoryUnsolved",
+          "#Meteoroid",
+          "#Exploration"
+        ],
+        "hook": null,
+        "idea": "1. The Tunguska event: What caused the massive 1908 Siberian explosion?",
+        "measured_duration_seconds": 33.12,
+        "model_versions": null,
+        "prompt_versions": null,
+        "provenance": {
+          "captured_at": "2026-10-02T08:19:48Z",
+          "notes": "Manual test source; original source hash 4745d8f2f544b9c85dfe7abf1f18e3dd21759677353465ca910a8297312a6cbb",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "source_record_id": "daily_queue_2026-09-14/slot-10:00",
+          "source_run_id": "first-private"
+        },
+        "run_id": "first-private",
+        "script": "In 1908, a massive explosion flattened 2,000 square kilometers of Siberian forest—without a crater. Scientists say a meteoroid or comet exploded in the atmosphere, releasing energy 1,000 times that of Hiroshima. But no solid fragments were found. Some speculate it was a comet; others, a mini black hole or alien technology—but these remain unproven theories. To this day, the Tunguska event remains one of history’s greatest unsolved mysteries—an enormous blast with no clear cause. What truly happened over Siberia? We still don’t know.",
+        "title": "The Tunguska Enigma",
+        "topic": "unsolved mysteries"
+      },
+      "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+      "source_identity": "daily_queue_2026-09-14/slot-10:00",
+      "storage_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+      "table": "generation_records"
+    },
+    {
+      "action": "INSERT",
+      "channel": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "conflict_status": "NONE",
+      "dependencies": [
+        {
+          "storage_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+          "table": "channel_profiles"
+        },
+        {
+          "storage_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+          "table": "generation_records"
+        }
+      ],
+      "identity_semantics": "Proposed storage identity, not recovered historical identity",
+      "key_fields": {
+        "privacy_status": "private",
+        "published_video_id": "ecb106de-6c93-54eb-b2c0-6f44217b7cff",
+        "youtube_video_id": "iyrVp9tEMVw"
+      },
+      "record": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "created_at": "2026-10-02T08:19:48Z",
+        "generation_reference": {
+          "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+          "record_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+          "record_type": "generation"
+        },
+        "privacy_status": "private",
+        "provenance": {
+          "captured_at": "2026-10-02T08:19:48Z",
+          "notes": "Manual test source; original source hash 4745d8f2f544b9c85dfe7abf1f18e3dd21759677353465ca910a8297312a6cbb",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "source_record_id": "daily_queue_2026-09-14/slot-10:00",
+          "source_run_id": "first-private"
+        },
+        "published_at": null,
+        "published_video_id": "ecb106de-6c93-54eb-b2c0-6f44217b7cff",
+        "updated_at": "2026-10-02T08:19:48Z",
+        "upload_metadata": {
+          "privacy_status": "private",
+          "status": "uploaded",
+          "success": true,
+          "title": "The Tunguska Enigma",
+          "video_id": "iyrVp9tEMVw",
+          "video_url": "https://www.youtube.com/watch?v=iyrVp9tEMVw"
+        },
+        "youtube_video_id": "iyrVp9tEMVw"
+      },
+      "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+      "source_identity": "daily_queue_2026-09-14/slot-10:00",
+      "storage_id": "ecb106de-6c93-54eb-b2c0-6f44217b7cff",
+      "table": "published_videos"
+    },
+    {
+      "action": "INSERT",
+      "channel": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "conflict_status": "NONE",
+      "dependencies": [
+        {
+          "storage_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+          "table": "channel_profiles"
+        },
+        {
+          "storage_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+          "table": "generation_records"
+        }
+      ],
+      "identity_semantics": "Proposed storage identity, not recovered historical identity",
+      "key_fields": {
+        "extraction_version": "preview-v1",
+        "feature_record_id": "e92116a7-b283-5d5d-abe8-fda8dee41564"
+      },
+      "record": {
+        "categories": null,
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "content_structure": null,
+        "created_at": "2026-10-02T08:19:48Z",
+        "extraction_method": "local-explicit-topic-and-hashtags; numerical text measures kept in evidence envelope",
+        "extraction_version": "preview-v1",
+        "feature_record_id": "e92116a7-b283-5d5d-abe8-fda8dee41564",
+        "generation_reference": {
+          "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+          "record_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+          "record_type": "generation"
+        },
+        "hashtags": [
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "#Tunguska"
+          },
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "#Mystery"
+          },
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "#Siberia"
+          },
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "#UFOtheory"
+          },
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "#ScientificEnigma"
+          },
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "#HistoryUnsolved"
+          },
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "#Meteoroid"
+          },
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "#Exploration"
+          }
+        ],
+        "hook_patterns": null,
+        "keywords": null,
+        "provenance": {
+          "captured_at": "2026-10-02T08:19:48Z",
+          "notes": "Manual test source; original source hash 4745d8f2f544b9c85dfe7abf1f18e3dd21759677353465ca910a8297312a6cbb",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "source_record_id": "daily_queue_2026-09-14/slot-10:00",
+          "source_run_id": "first-private"
+        },
+        "title_patterns": null,
+        "topics": [
+          {
+            "knowledge": "known",
+            "notes": null,
+            "value": "unsolved mysteries"
+          }
+        ],
+        "video_reference": null
+      },
+      "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+      "source_identity": "daily_queue_2026-09-14/slot-10:00",
+      "storage_id": "e92116a7-b283-5d5d-abe8-fda8dee41564",
+      "table": "content_features"
+    }
+  ],
+  "timestamp_policy": "Profile/publication created_at and updated_at are offline preview-object creation metadata, NOT historical registration/upload timestamps. Replace with actual administrative timestamps upon any future separately authorized import. Feature created_at is this local extraction event.",
+  "transaction_design": {
+    "atomic": true,
+    "executed": false,
+    "order": [
+      "channel_profiles",
+      "generation_records",
+      "published_videos",
+      "content_features"
+    ],
+    "policy": "Future authorized live import must recheck ownership/uniqueness and compare records within one transaction; insert only absent records; any conflict rolls back all inserts. Never upsert conflicting evidence."
+  }
+}

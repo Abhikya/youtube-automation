@@ -1,2 +1,0 @@
-# youtube-automation
-Youtube automation

@@ -14,3 +14,5 @@ tzdata
 filelock>=3,<4
 fastapi
 uvicorn
+
+psycopg[binary]>=3.2,<4

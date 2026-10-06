@@ -1,0 +1,1858 @@
+{
+  "audit_provenance_at": "2026-10-02T08:19:48+00:00",
+  "candidate_timestamp_semantics": "Profile/publication created_at and updated_at are offline preview-object creation metadata, NOT historical registration/upload timestamps. Replace with actual administrative timestamps upon any future separately authorized import. Feature created_at is this local extraction event.",
+  "channel_mapping": {
+    "assignment": "owner explicitly confirmed all four videos",
+    "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+    "display_name": "Minute Mysteries",
+    "identity_status": "proposed storage identity; must reconcile with existing profile before future import",
+    "youtube_channel_id": null
+  },
+  "channel_profile_candidates": [
+    {
+      "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "configuration_version": "preview-v1",
+      "content_config": {},
+      "created_at": "2026-10-02T08:19:48Z",
+      "display_name": "Minute Mysteries",
+      "identity": "Owner-confirmed channel represented by this preview",
+      "metadata_strategy": {},
+      "provenance": {
+        "captured_at": "2026-10-02T08:19:48Z",
+        "notes": "captured_at is audit provenance time, not metric observation time. Observed date only: 2026-10-02.",
+        "source": "owner-confirmed YouTube Studio evidence",
+        "source_record_id": "ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c",
+        "source_run_id": null
+      },
+      "updated_at": "2026-10-02T08:19:48Z",
+      "youtube_channel_id": null
+    }
+  ],
+  "conflicting_fields": [],
+  "content_feature_candidates": [
+    {
+      "categories": null,
+      "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "content_structure": null,
+      "created_at": "2026-10-02T08:19:48Z",
+      "extraction_method": "local-explicit-topic-and-hashtags; numerical text measures kept in evidence envelope",
+      "extraction_version": "preview-v1",
+      "feature_record_id": "e92116a7-b283-5d5d-abe8-fda8dee41564",
+      "generation_reference": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "record_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+        "record_type": "generation"
+      },
+      "hashtags": [
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "#Tunguska"
+        },
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "#Mystery"
+        },
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "#Siberia"
+        },
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "#UFOtheory"
+        },
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "#ScientificEnigma"
+        },
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "#HistoryUnsolved"
+        },
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "#Meteoroid"
+        },
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "#Exploration"
+        }
+      ],
+      "hook_patterns": null,
+      "keywords": null,
+      "provenance": {
+        "captured_at": "2026-10-02T08:19:48Z",
+        "notes": "Manual test source; original source hash 4745d8f2f544b9c85dfe7abf1f18e3dd21759677353465ca910a8297312a6cbb",
+        "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+        "source_record_id": "daily_queue_2026-09-14/slot-10:00",
+        "source_run_id": "first-private"
+      },
+      "title_patterns": null,
+      "topics": [
+        {
+          "knowledge": "known",
+          "notes": null,
+          "value": "unsolved mysteries"
+        }
+      ],
+      "video_reference": null
+    }
+  ],
+  "derived_fields": {
+    "03330475-a9ed-5a49-bc62-2766aeb8f641": [
+      "title_character_count",
+      "title_word_count"
+    ],
+    "1d5241eb-2315-5dd9-b982-eb5e67a8f6c5": [
+      "generation_identity",
+      "measured_duration_seconds",
+      "script_word_count",
+      "script_character_count",
+      "description_character_count",
+      "hashtag_count",
+      "opening_text",
+      "title_character_count",
+      "title_word_count"
+    ],
+    "4e3644d5-92e0-5a68-977d-40182ca9747d": [
+      "title_character_count",
+      "title_word_count"
+    ],
+    "cc7cce9e-b84c-5876-a8a7-d25177d99cfc": [
+      "title_character_count",
+      "title_word_count"
+    ]
+  },
+  "determinism": "UUID5 identities based on owner source ordinal or explicit source locator, not titles. Preview time is explicit audit provenance, not a fabricated historical event. Canonical sorted JSON.",
+  "duplicate_checks": {
+    "conflicts": "No conflicting known values found. Studio date is not an exact publication timestamp; historical private privacy is not current remote privacy.",
+    "evidence_ids_unique": true,
+    "idea_queue_overlap": "Tunguska proposal and queue item represent one generation",
+    "metric_draft_ids_unique": true,
+    "retry_history": "Previous failed attempt and successful upload represent one video",
+    "stock_temp_identical_pairs": [
+      [
+        "assets\\clips_library\\abandoned_small_town_street_0.mp4",
+        "temp\\clips\\abandoned_small_town_street_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\abandoned_small_town_street_1.mp4",
+        "temp\\clips\\abandoned_small_town_street_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\abandoned_small_town_street_2.mp4",
+        "temp\\clips\\abandoned_small_town_street_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\alien_technology_concept_0.mp4",
+        "temp\\clips\\alien_technology_concept_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\alien_technology_concept_1.mp4",
+        "temp\\clips\\alien_technology_concept_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\alien_technology_concept_2.mp4",
+        "temp\\clips\\alien_technology_concept_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\closeup_of_dinner_plate_on_table_0.mp4",
+        "temp\\clips\\closeup_of_dinner_plate_on_table_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\closeup_of_dinner_plate_on_table_1.mp4",
+        "temp\\clips\\closeup_of_dinner_plate_on_table_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\closeup_of_dinner_plate_on_table_2.mp4",
+        "temp\\clips\\closeup_of_dinner_plate_on_table_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\empty_rocking_chair_on_porch_0.mp4",
+        "temp\\clips\\empty_rocking_chair_on_porch_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\empty_rocking_chair_on_porch_1.mp4",
+        "temp\\clips\\empty_rocking_chair_on_porch_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\empty_rocking_chair_on_porch_2.mp4",
+        "temp\\clips\\empty_rocking_chair_on_porch_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\massive_explosion_animation_0.mp4",
+        "temp\\clips\\massive_explosion_animation_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\massive_explosion_animation_1.mp4",
+        "temp\\clips\\massive_explosion_animation_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\massive_explosion_animation_2.mp4",
+        "temp\\clips\\massive_explosion_animation_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\mysterious_dark_forest_at_night_0.mp4",
+        "temp\\clips\\mysterious_dark_forest_at_night_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\mysterious_dark_forest_at_night_1.mp4",
+        "temp\\clips\\mysterious_dark_forest_at_night_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\mysterious_dark_forest_at_night_2.mp4",
+        "temp\\clips\\mysterious_dark_forest_at_night_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\mysterious_night_sky_over_forest_0.mp4",
+        "temp\\clips\\mysterious_night_sky_over_forest_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\mysterious_night_sky_over_forest_1.mp4",
+        "temp\\clips\\mysterious_night_sky_over_forest_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\mysterious_night_sky_over_forest_2.mp4",
+        "temp\\clips\\mysterious_night_sky_over_forest_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\old_town_with_fog_and_shadows_0.mp4",
+        "temp\\clips\\old_town_with_fog_and_shadows_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\old_town_with_fog_and_shadows_1.mp4",
+        "temp\\clips\\old_town_with_fog_and_shadows_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\old_town_with_fog_and_shadows_2.mp4",
+        "temp\\clips\\old_town_with_fog_and_shadows_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\scientists_studying_meteor_impact_0.mp4",
+        "temp\\clips\\scientists_studying_meteor_impact_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\scientists_studying_meteor_impact_1.mp4",
+        "temp\\clips\\scientists_studying_meteor_impact_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\scientists_studying_meteor_impact_2.mp4",
+        "temp\\clips\\scientists_studying_meteor_impact_2.mp4"
+      ],
+      [
+        "assets\\clips_library\\Siberian_forest_aerial_0.mp4",
+        "temp\\clips\\Siberian_forest_aerial_0.mp4"
+      ],
+      [
+        "assets\\clips_library\\Siberian_forest_aerial_1.mp4",
+        "temp\\clips\\Siberian_forest_aerial_1.mp4"
+      ],
+      [
+        "assets\\clips_library\\Siberian_forest_aerial_2.mp4",
+        "temp\\clips\\Siberian_forest_aerial_2.mp4"
+      ]
+    ]
+  },
+  "future_import_scope": {
+    "blocked_metric_evidence": 4,
+    "content_features": 1,
+    "generation": 1,
+    "learning_context": 0,
+    "profile": 1,
+    "publication": 1,
+    "valid_metric_snapshots": 0
+  },
+  "generation_candidates": [
+    {
+      "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "context_reference": null,
+      "context_version": null,
+      "description": "In 1908, an extraordinary event shook the remote forests of Siberia as a massive explosion flattened an area of 2,000 square kilometers. Known as the Tunguska event, this phenomenon occurred without leaving a crater. Scientists attribute it to a meteoroid or comet exploding in the atmosphere, unleashing energy 1,000 times greater than that of the Hiroshima bomb. However, the absence of solid fragments raises questions. While some propose theories—ranging from a comet to a mini black hole or even alien technology—these remain unproven. The Tunguska event endures as one of history’s greatest mysteries, with the true cause shrouded in uncertainty. What truly transpired over Siberia? We still don’t know.",
+      "generated_at": "2026-09-14T14:04:34.207231+05:30",
+      "generation_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+      "hashtags": [
+        "#Tunguska",
+        "#Mystery",
+        "#Siberia",
+        "#UFOtheory",
+        "#ScientificEnigma",
+        "#HistoryUnsolved",
+        "#Meteoroid",
+        "#Exploration"
+      ],
+      "hook": null,
+      "idea": "1. The Tunguska event: What caused the massive 1908 Siberian explosion?",
+      "measured_duration_seconds": 33.12,
+      "model_versions": null,
+      "prompt_versions": null,
+      "provenance": {
+        "captured_at": "2026-10-02T08:19:48Z",
+        "notes": "Manual test source; original source hash 4745d8f2f544b9c85dfe7abf1f18e3dd21759677353465ca910a8297312a6cbb",
+        "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+        "source_record_id": "daily_queue_2026-09-14/slot-10:00",
+        "source_run_id": "first-private"
+      },
+      "run_id": "first-private",
+      "script": "In 1908, a massive explosion flattened 2,000 square kilometers of Siberian forest—without a crater. Scientists say a meteoroid or comet exploded in the atmosphere, releasing energy 1,000 times that of Hiroshima. But no solid fragments were found. Some speculate it was a comet; others, a mini black hole or alien technology—but these remain unproven theories. To this day, the Tunguska event remains one of history’s greatest unsolved mysteries—an enormous blast with no clear cause. What truly happened over Siberia? We still don’t know.",
+      "title": "The Tunguska Enigma",
+      "topic": "unsolved mysteries"
+    }
+  ],
+  "import_order": [
+    "Resolve stable channel profile identity",
+    "GenerationRecord",
+    "PublishedVideo",
+    "ContentFeatures",
+    "MetricSnapshot only once exact observation timestamp and video identities are available",
+    "LearningContext only after separately authorized evidence analysis"
+  ],
+  "inferred_fields": {
+    "03330475-a9ed-5a49-bc62-2766aeb8f641": [],
+    "1d5241eb-2315-5dd9-b982-eb5e67a8f6c5": [
+      "generation_run_id"
+    ],
+    "4e3644d5-92e0-5a68-977d-40182ca9747d": [],
+    "cc7cce9e-b84c-5876-a8a7-d25177d99cfc": []
+  },
+  "learning_context": {
+    "candidates": [],
+    "notes": "No ranking or causal/performance conclusions.",
+    "status": "NOT READY / INSUFFICIENT EVIDENCE"
+  },
+  "metric_candidates": [
+    {
+      "candidate": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "collected_at": null,
+        "collection_status": "partial",
+        "metric_source": "YouTube Studio screenshot / owner-provided evidence",
+        "metrics": {
+          "views": 92
+        },
+        "observation_window": {
+          "kind": "unknown"
+        },
+        "provenance": {
+          "captured_at": "2026-10-02T08:19:48+00:00",
+          "notes": "captured_at is audit provenance time, not metric observation time. Observed date only: 2026-10-02.",
+          "source": "owner-confirmed YouTube Studio evidence",
+          "source_record_id": "ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c"
+        },
+        "snapshot_id": "8385f3ef-5034-567c-bcf8-a75a555752fe",
+        "youtube_video_id": "iyrVp9tEMVw"
+      },
+      "evidence_id": "1d5241eb-2315-5dd9-b982-eb5e67a8f6c5",
+      "importable": false,
+      "notes": "Do not invent collected_at or YouTube ID; observation_window unknown avoids unsupported cumulative/interval claims.",
+      "observation_precision": "date",
+      "observed_at": "2026-10-02",
+      "schema_valid": false,
+      "validation_errors": [
+        {
+          "field": "collected_at",
+          "reason": "Input should be a valid datetime"
+        }
+      ]
+    },
+    {
+      "candidate": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "collected_at": null,
+        "collection_status": "partial",
+        "metric_source": "YouTube Studio screenshot / owner-provided evidence",
+        "metrics": {
+          "views": 400
+        },
+        "observation_window": {
+          "kind": "unknown"
+        },
+        "provenance": {
+          "captured_at": "2026-10-02T08:19:48+00:00",
+          "notes": "captured_at is audit provenance time, not metric observation time. Observed date only: 2026-10-02.",
+          "source": "owner-confirmed YouTube Studio evidence",
+          "source_record_id": "ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c"
+        },
+        "snapshot_id": "3e1a7319-cf97-5cc9-b37b-891eeee29401",
+        "youtube_video_id": null
+      },
+      "evidence_id": "4e3644d5-92e0-5a68-977d-40182ca9747d",
+      "importable": false,
+      "notes": "Do not invent collected_at or YouTube ID; observation_window unknown avoids unsupported cumulative/interval claims.",
+      "observation_precision": "date",
+      "observed_at": "2026-10-02",
+      "schema_valid": false,
+      "validation_errors": [
+        {
+          "field": "youtube_video_id",
+          "reason": "Input should be a valid string"
+        },
+        {
+          "field": "collected_at",
+          "reason": "Input should be a valid datetime"
+        }
+      ]
+    },
+    {
+      "candidate": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "collected_at": null,
+        "collection_status": "partial",
+        "metric_source": "YouTube Studio screenshot / owner-provided evidence",
+        "metrics": {
+          "views": 4
+        },
+        "observation_window": {
+          "kind": "unknown"
+        },
+        "provenance": {
+          "captured_at": "2026-10-02T08:19:48+00:00",
+          "notes": "captured_at is audit provenance time, not metric observation time. Observed date only: 2026-10-02.",
+          "source": "owner-confirmed YouTube Studio evidence",
+          "source_record_id": "ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c"
+        },
+        "snapshot_id": "e4624fd7-9dd9-5e7a-ae81-c584a27cae46",
+        "youtube_video_id": null
+      },
+      "evidence_id": "cc7cce9e-b84c-5876-a8a7-d25177d99cfc",
+      "importable": false,
+      "notes": "Do not invent collected_at or YouTube ID; observation_window unknown avoids unsupported cumulative/interval claims.",
+      "observation_precision": "date",
+      "observed_at": "2026-10-02",
+      "schema_valid": false,
+      "validation_errors": [
+        {
+          "field": "youtube_video_id",
+          "reason": "Input should be a valid string"
+        },
+        {
+          "field": "collected_at",
+          "reason": "Input should be a valid datetime"
+        }
+      ]
+    },
+    {
+      "candidate": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "collected_at": null,
+        "collection_status": "partial",
+        "metric_source": "YouTube Studio screenshot / owner-provided evidence",
+        "metrics": {
+          "views": 241
+        },
+        "observation_window": {
+          "kind": "unknown"
+        },
+        "provenance": {
+          "captured_at": "2026-10-02T08:19:48+00:00",
+          "notes": "captured_at is audit provenance time, not metric observation time. Observed date only: 2026-10-02.",
+          "source": "owner-confirmed YouTube Studio evidence",
+          "source_record_id": "ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c"
+        },
+        "snapshot_id": "a3944942-4144-5909-84cb-196266cf0339",
+        "youtube_video_id": null
+      },
+      "evidence_id": "03330475-a9ed-5a49-bc62-2766aeb8f641",
+      "importable": false,
+      "notes": "Do not invent collected_at or YouTube ID; observation_window unknown avoids unsupported cumulative/interval claims.",
+      "observation_precision": "date",
+      "observed_at": "2026-10-02",
+      "schema_valid": false,
+      "validation_errors": [
+        {
+          "field": "youtube_video_id",
+          "reason": "Input should be a valid string"
+        },
+        {
+          "field": "collected_at",
+          "reason": "Input should be a valid datetime"
+        }
+      ]
+    }
+  ],
+  "missing_fields": {
+    "03330475-a9ed-5a49-bc62-2766aeb8f641": [
+      "topic",
+      "generation_identity",
+      "generation_date",
+      "generation_timestamp",
+      "generation_status",
+      "generation_run_id",
+      "queue_slot",
+      "output_filename",
+      "output_path",
+      "media_fingerprint",
+      "sha256",
+      "measured_duration_seconds",
+      "script",
+      "script_word_count",
+      "script_character_count",
+      "prompt",
+      "model",
+      "description",
+      "description_character_count",
+      "hashtags",
+      "hashtag_count",
+      "opening_text",
+      "explicit_hook",
+      "category",
+      "named_entities",
+      "keywords",
+      "content_structure",
+      "narration_information",
+      "narration_duration_seconds",
+      "scene_count",
+      "youtube_video_id",
+      "upload_status",
+      "privacy_status",
+      "upload_timestamp",
+      "published_at",
+      "generation_run_linkage",
+      "upload_run_linkage",
+      "actual_upload_slot",
+      "publication_slot"
+    ],
+    "1d5241eb-2315-5dd9-b982-eb5e67a8f6c5": [
+      "prompt",
+      "model",
+      "explicit_hook",
+      "category",
+      "named_entities",
+      "keywords",
+      "content_structure",
+      "narration_information",
+      "narration_duration_seconds",
+      "scene_count",
+      "upload_timestamp",
+      "published_at",
+      "generation_run_linkage",
+      "upload_run_linkage",
+      "actual_upload_slot",
+      "publication_slot"
+    ],
+    "4e3644d5-92e0-5a68-977d-40182ca9747d": [
+      "topic",
+      "generation_identity",
+      "generation_date",
+      "generation_timestamp",
+      "generation_status",
+      "generation_run_id",
+      "queue_slot",
+      "output_filename",
+      "output_path",
+      "media_fingerprint",
+      "sha256",
+      "measured_duration_seconds",
+      "script",
+      "script_word_count",
+      "script_character_count",
+      "prompt",
+      "model",
+      "description",
+      "description_character_count",
+      "hashtags",
+      "hashtag_count",
+      "opening_text",
+      "explicit_hook",
+      "category",
+      "named_entities",
+      "keywords",
+      "content_structure",
+      "narration_information",
+      "narration_duration_seconds",
+      "scene_count",
+      "youtube_video_id",
+      "upload_status",
+      "privacy_status",
+      "upload_timestamp",
+      "published_at",
+      "generation_run_linkage",
+      "upload_run_linkage",
+      "actual_upload_slot",
+      "publication_slot"
+    ],
+    "cc7cce9e-b84c-5876-a8a7-d25177d99cfc": [
+      "topic",
+      "generation_identity",
+      "generation_date",
+      "generation_timestamp",
+      "generation_status",
+      "generation_run_id",
+      "queue_slot",
+      "output_filename",
+      "output_path",
+      "media_fingerprint",
+      "sha256",
+      "measured_duration_seconds",
+      "script",
+      "script_word_count",
+      "script_character_count",
+      "prompt",
+      "model",
+      "description",
+      "description_character_count",
+      "hashtags",
+      "hashtag_count",
+      "opening_text",
+      "explicit_hook",
+      "category",
+      "named_entities",
+      "keywords",
+      "content_structure",
+      "narration_information",
+      "narration_duration_seconds",
+      "scene_count",
+      "youtube_video_id",
+      "upload_status",
+      "privacy_status",
+      "upload_timestamp",
+      "published_at",
+      "generation_run_linkage",
+      "upload_run_linkage",
+      "actual_upload_slot",
+      "publication_slot"
+    ]
+  },
+  "mode": "OFFLINE_PREVIEW_ONLY",
+  "next_step": "Resolve the three October 1 YouTube IDs and exact observation timestamp from owner-provided local exports; reconcile channel/storage identities. Do not import or start Phase 2.6.",
+  "phase": "2.5",
+  "proposed_storage_identities": {
+    "channel": "4491252f-3db8-5466-891b-a15a7d3a7271",
+    "features": "e92116a7-b283-5d5d-abe8-fda8dee41564",
+    "generation": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+    "publication": "ecb106de-6c93-54eb-b2c0-6f44217b7cff"
+  },
+  "publication_candidates": [
+    {
+      "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+      "created_at": "2026-10-02T08:19:48Z",
+      "generation_reference": {
+        "channel_context_id": "4491252f-3db8-5466-891b-a15a7d3a7271",
+        "record_id": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d",
+        "record_type": "generation"
+      },
+      "privacy_status": "private",
+      "provenance": {
+        "captured_at": "2026-10-02T08:19:48Z",
+        "notes": "Manual test source; original source hash 4745d8f2f544b9c85dfe7abf1f18e3dd21759677353465ca910a8297312a6cbb",
+        "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+        "source_record_id": "daily_queue_2026-09-14/slot-10:00",
+        "source_run_id": "first-private"
+      },
+      "published_at": null,
+      "published_video_id": "ecb106de-6c93-54eb-b2c0-6f44217b7cff",
+      "updated_at": "2026-10-02T08:19:48Z",
+      "upload_metadata": {
+        "privacy_status": "private",
+        "status": "uploaded",
+        "success": true,
+        "title": "The Tunguska Enigma",
+        "video_id": "iyrVp9tEMVw",
+        "video_url": "https://www.youtube.com/watch?v=iyrVp9tEMVw"
+      },
+      "youtube_video_id": "iyrVp9tEMVw"
+    }
+  ],
+  "skipped_sources": [
+    "10 idea suggestions are not completed generations",
+    "30 stock clips plus 30 identical temporary copies are not final outputs",
+    "shared voice.mp3 has no immutable historical association",
+    "test fixtures and documentation examples",
+    "credential files excluded without reading contents"
+  ],
+  "source_inventory": [
+    {
+      "files": 2,
+      "paths": [
+        "data\\idea_memory.json",
+        "data\\manual_tests\\first-private\\daily_queue_2026-09-14.json"
+      ],
+      "source": "data",
+      "types": {
+        ".json": 2
+      }
+    },
+    {
+      "files": 2,
+      "paths": [
+        "output\\videos\\mysteries_20260914105318.mp4",
+        "output\\videos\\unsolved_mysteries_20260914134353.mp4"
+      ],
+      "source": "output",
+      "types": {
+        ".mp4": 2
+      }
+    },
+    {
+      "files": 31,
+      "paths": [
+        "temp\\audio\\voice.mp3",
+        "temp\\clips\\abandoned_small_town_street_0.mp4",
+        "temp\\clips\\abandoned_small_town_street_1.mp4",
+        "temp\\clips\\abandoned_small_town_street_2.mp4",
+        "temp\\clips\\alien_technology_concept_0.mp4",
+        "temp\\clips\\alien_technology_concept_1.mp4",
+        "temp\\clips\\alien_technology_concept_2.mp4",
+        "temp\\clips\\closeup_of_dinner_plate_on_table_0.mp4",
+        "temp\\clips\\closeup_of_dinner_plate_on_table_1.mp4",
+        "temp\\clips\\closeup_of_dinner_plate_on_table_2.mp4",
+        "temp\\clips\\empty_rocking_chair_on_porch_0.mp4",
+        "temp\\clips\\empty_rocking_chair_on_porch_1.mp4",
+        "temp\\clips\\empty_rocking_chair_on_porch_2.mp4",
+        "temp\\clips\\massive_explosion_animation_0.mp4",
+        "temp\\clips\\massive_explosion_animation_1.mp4",
+        "temp\\clips\\massive_explosion_animation_2.mp4",
+        "temp\\clips\\mysterious_dark_forest_at_night_0.mp4",
+        "temp\\clips\\mysterious_dark_forest_at_night_1.mp4",
+        "temp\\clips\\mysterious_dark_forest_at_night_2.mp4",
+        "temp\\clips\\mysterious_night_sky_over_forest_0.mp4",
+        "temp\\clips\\mysterious_night_sky_over_forest_1.mp4",
+        "temp\\clips\\mysterious_night_sky_over_forest_2.mp4",
+        "temp\\clips\\old_town_with_fog_and_shadows_0.mp4",
+        "temp\\clips\\old_town_with_fog_and_shadows_1.mp4",
+        "temp\\clips\\old_town_with_fog_and_shadows_2.mp4",
+        "temp\\clips\\scientists_studying_meteor_impact_0.mp4",
+        "temp\\clips\\scientists_studying_meteor_impact_1.mp4",
+        "temp\\clips\\scientists_studying_meteor_impact_2.mp4",
+        "temp\\clips\\Siberian_forest_aerial_0.mp4",
+        "temp\\clips\\Siberian_forest_aerial_1.mp4",
+        "temp\\clips\\Siberian_forest_aerial_2.mp4"
+      ],
+      "source": "temp",
+      "types": {
+        ".mp3": 1,
+        ".mp4": 30
+      }
+    },
+    {
+      "files": 30,
+      "paths": [
+        "assets\\clips_library\\abandoned_small_town_street_0.mp4",
+        "assets\\clips_library\\abandoned_small_town_street_1.mp4",
+        "assets\\clips_library\\abandoned_small_town_street_2.mp4",
+        "assets\\clips_library\\alien_technology_concept_0.mp4",
+        "assets\\clips_library\\alien_technology_concept_1.mp4",
+        "assets\\clips_library\\alien_technology_concept_2.mp4",
+        "assets\\clips_library\\closeup_of_dinner_plate_on_table_0.mp4",
+        "assets\\clips_library\\closeup_of_dinner_plate_on_table_1.mp4",
+        "assets\\clips_library\\closeup_of_dinner_plate_on_table_2.mp4",
+        "assets\\clips_library\\empty_rocking_chair_on_porch_0.mp4",
+        "assets\\clips_library\\empty_rocking_chair_on_porch_1.mp4",
+        "assets\\clips_library\\empty_rocking_chair_on_porch_2.mp4",
+        "assets\\clips_library\\massive_explosion_animation_0.mp4",
+        "assets\\clips_library\\massive_explosion_animation_1.mp4",
+        "assets\\clips_library\\massive_explosion_animation_2.mp4",
+        "assets\\clips_library\\mysterious_dark_forest_at_night_0.mp4",
+        "assets\\clips_library\\mysterious_dark_forest_at_night_1.mp4",
+        "assets\\clips_library\\mysterious_dark_forest_at_night_2.mp4",
+        "assets\\clips_library\\mysterious_night_sky_over_forest_0.mp4",
+        "assets\\clips_library\\mysterious_night_sky_over_forest_1.mp4",
+        "assets\\clips_library\\mysterious_night_sky_over_forest_2.mp4",
+        "assets\\clips_library\\old_town_with_fog_and_shadows_0.mp4",
+        "assets\\clips_library\\old_town_with_fog_and_shadows_1.mp4",
+        "assets\\clips_library\\old_town_with_fog_and_shadows_2.mp4",
+        "assets\\clips_library\\scientists_studying_meteor_impact_0.mp4",
+        "assets\\clips_library\\scientists_studying_meteor_impact_1.mp4",
+        "assets\\clips_library\\scientists_studying_meteor_impact_2.mp4",
+        "assets\\clips_library\\Siberian_forest_aerial_0.mp4",
+        "assets\\clips_library\\Siberian_forest_aerial_1.mp4",
+        "assets\\clips_library\\Siberian_forest_aerial_2.mp4"
+      ],
+      "source": "assets",
+      "types": {
+        ".mp4": 30
+      }
+    },
+    {
+      "files": 0,
+      "paths": [],
+      "source": ".actions-work",
+      "types": {}
+    }
+  ],
+  "status": "PHASE 2.5 AUDIT/PREVIEW COMPLETE",
+  "unresolved_sources": [
+    "Three October 1 YouTube IDs and local generation/upload records",
+    "Exact Studio observation timestamp/timezone for all four",
+    "Other rendered MP4 lacks explicit video linkage",
+    "Remote artifacts not inspected; no external calls",
+    "Current remote privacy not verified"
+  ],
+  "validation_results": {
+    "blocked_metric_drafts": 4,
+    "channel_isolation": "PASS; foreign-channel access rejected",
+    "conflict_detection": "No conflicts among available known fields",
+    "database_safety": "No database module imported or connection attempted; no migrations; zero writes",
+    "duplicate_detection": "PASS",
+    "linkage": "PASS for Tunguska generation/publication/features; other entries unlinked",
+    "network_safety": "No APIs called; model revalidation passes under socket-connect guard",
+    "provenance": "PASS; source files hashed, owner evidence attributed",
+    "timezone_validation": "PASS for valid candidates; date-only metric drafts deliberately blocked",
+    "validated_schema_candidates": {
+      "ChannelProfile": 1,
+      "ContentFeatures": 1,
+      "GenerationRecord": 1,
+      "PublishedVideo": 1
+    }
+  },
+  "video_evidence": [
+    {
+      "evidence_id": "1d5241eb-2315-5dd9-b982-eb5e67a8f6c5",
+      "fields": {
+        "actual_upload_slot": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "category": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "channel": {
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "Minute Mysteries"
+        },
+        "content_structure": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "current_observed_views": {
+          "quality": "KNOWN",
+          "source": "owner Studio observation",
+          "value": 92
+        },
+        "description": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "In 1908, an extraordinary event shook the remote forests of Siberia as a massive explosion flattened an area of 2,000 square kilometers. Known as the Tunguska event, this phenomenon occurred without leaving a crater. Scientists attribute it to a meteoroid or comet exploding in the atmosphere, unleashing energy 1,000 times greater than that of the Hiroshima bomb. However, the absence of solid fragments raises questions. While some propose theories—ranging from a comet to a mini black hole or even alien technology—these remain unproven. The Tunguska event endures as one of history’s greatest mysteries, with the true cause shrouded in uncertainty. What truly transpired over Siberia? We still don’t know."
+        },
+        "description_character_count": {
+          "quality": "DERIVED",
+          "source": "deterministic text extraction",
+          "value": 709
+        },
+        "explicit_hook": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_date": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "2026-09-14"
+        },
+        "generation_identity": {
+          "notes": "New import identity; not present historically",
+          "quality": "DERIVED",
+          "source": "proposed deterministic storage identity",
+          "value": "7dc73709-78a4-5ab4-98cc-dd663bfd6f1d"
+        },
+        "generation_run_id": {
+          "notes": "Manual run token; not a GitHub run ID",
+          "quality": "INFERRED",
+          "source": "run_private_test.py directory convention",
+          "value": "first-private"
+        },
+        "generation_run_linkage": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_status": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "ready"
+        },
+        "generation_timestamp": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "2026-09-14T14:04:34.207231+05:30"
+        },
+        "hashtag_count": {
+          "quality": "DERIVED",
+          "source": "deterministic text extraction",
+          "value": 8
+        },
+        "hashtags": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": [
+            "#Tunguska",
+            "#Mystery",
+            "#Siberia",
+            "#UFOtheory",
+            "#ScientificEnigma",
+            "#HistoryUnsolved",
+            "#Meteoroid",
+            "#Exploration"
+          ]
+        },
+        "keywords": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "measured_duration_seconds": {
+          "quality": "DERIVED",
+          "source": "local FFprobe format.duration",
+          "value": 33.12
+        },
+        "media_fingerprint": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": {
+            "kind": "rendered_video",
+            "mtime_ns": 1789374769493561100,
+            "owner": "2026-09-14:10:00",
+            "path": "D:\\chikky\\youtube-automation\\output\\videos\\unsolved_mysteries_20260914134353.mp4",
+            "sha256": "4cbb1eddec2cc8d8b838f29ff8f581b98cacff0ed30f7cd078a6f803d6905aac",
+            "size_bytes": 3965079
+          }
+        },
+        "model": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "named_entities": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "narration_duration_seconds": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "narration_information": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "observed_at": {
+          "notes": "Date precision only; exact time/timezone not supplied",
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "2026-10-02"
+        },
+        "opening_text": {
+          "notes": "Opening sentence is not an explicitly authored hook",
+          "quality": "DERIVED",
+          "source": "deterministic text extraction",
+          "value": "In 1908, a massive explosion flattened 2,000 square kilometers of Siberian forest—without a crater."
+        },
+        "output_filename": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "unsolved_mysteries_20260914134353.mp4"
+        },
+        "output_path": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "D:\\chikky\\youtube-automation\\output\\videos\\unsolved_mysteries_20260914134353.mp4"
+        },
+        "privacy_status": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "private"
+        },
+        "prompt": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "publication_slot": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "published_at": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "queue_slot": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "10:00"
+        },
+        "scene_count": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "script": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "In 1908, a massive explosion flattened 2,000 square kilometers of Siberian forest—without a crater. Scientists say a meteoroid or comet exploded in the atmosphere, releasing energy 1,000 times that of Hiroshima. But no solid fragments were found. Some speculate it was a comet; others, a mini black hole or alien technology—but these remain unproven theories. To this day, the Tunguska event remains one of history’s greatest unsolved mysteries—an enormous blast with no clear cause. What truly happened over Siberia? We still don’t know."
+        },
+        "script_character_count": {
+          "quality": "DERIVED",
+          "source": "deterministic text extraction",
+          "value": 538
+        },
+        "script_word_count": {
+          "quality": "DERIVED",
+          "source": "deterministic text extraction",
+          "value": 83
+        },
+        "sha256": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "4cbb1eddec2cc8d8b838f29ff8f581b98cacff0ed30f7cd078a6f803d6905aac"
+        },
+        "title": {
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "The Tunguska Enigma"
+        },
+        "title_character_count": {
+          "notes": "Unicode code points, including spaces and punctuation",
+          "quality": "DERIVED",
+          "source": "Python len(title)",
+          "value": 19
+        },
+        "title_word_count": {
+          "quality": "DERIVED",
+          "source": "whitespace split",
+          "value": 3
+        },
+        "topic": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "unsolved mysteries"
+        },
+        "upload_run_linkage": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_status": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "uploaded"
+        },
+        "upload_timestamp": {
+          "quality": "MISSING",
+          "source": "local audit",
+          "value": null
+        },
+        "video_date": {
+          "quality": "KNOWN",
+          "source": "owner Studio date; not exact publication time",
+          "value": "2026-09-14"
+        },
+        "youtube_video_id": {
+          "quality": "KNOWN",
+          "source": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "value": "iyrVp9tEMVw"
+        }
+      },
+      "local_classification": "CONTENT_COMPLETE_IDENTITY_ASSIGNED",
+      "other_metrics": {
+        "average_view_duration": null,
+        "comments": null,
+        "ctr": null,
+        "impressions": null,
+        "likes": null,
+        "retention": null,
+        "subscribers_gained": null,
+        "traffic_sources": null,
+        "watch_time": null
+      },
+      "provenance": [
+        {
+          "kind": "owner-provided evidence",
+          "notes": "Owner confirms Studio observations. Screenshot image itself was not supplied in this turn; values are transcribed in the request.",
+          "path": "C:\\Users\\DESKTOP\\.codex\\attachments\\ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c\\Pasted text.txt",
+          "sha256": "05709d3f35bdf4976923665af4c4509cc2dc3739d2e6ade90b89480e47ba3481"
+        },
+        {
+          "locator": "videos[0]",
+          "path": "data/manual_tests/first-private/daily_queue_2026-09-14.json",
+          "sha256": "4745d8f2f544b9c85dfe7abf1f18e3dd21759677353465ca910a8297312a6cbb"
+        }
+      ]
+    },
+    {
+      "evidence_id": "4e3644d5-92e0-5a68-977d-40182ca9747d",
+      "fields": {
+        "actual_upload_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "category": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "channel": {
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "Minute Mysteries"
+        },
+        "content_structure": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "current_observed_views": {
+          "quality": "KNOWN",
+          "source": "owner Studio observation",
+          "value": 400
+        },
+        "description": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "description_character_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "explicit_hook": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_date": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_identity": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_run_id": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_run_linkage": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_timestamp": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "hashtag_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "hashtags": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "keywords": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "measured_duration_seconds": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "media_fingerprint": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "model": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "named_entities": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "narration_duration_seconds": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "narration_information": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "observed_at": {
+          "notes": "Date precision only; exact time/timezone not supplied",
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "2026-10-02"
+        },
+        "opening_text": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "output_filename": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "output_path": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "privacy_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "prompt": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "publication_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "published_at": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "queue_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "scene_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script_character_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script_word_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "sha256": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "title": {
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "The Wow! Signal: A Whisper from the Stars"
+        },
+        "title_character_count": {
+          "notes": "Unicode code points, including spaces and punctuation",
+          "quality": "DERIVED",
+          "source": "Python len(title)",
+          "value": 41
+        },
+        "title_word_count": {
+          "quality": "DERIVED",
+          "source": "whitespace split",
+          "value": 8
+        },
+        "topic": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_run_linkage": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_timestamp": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "video_date": {
+          "quality": "KNOWN",
+          "source": "owner Studio date; not exact publication time",
+          "value": "2026-10-01"
+        },
+        "youtube_video_id": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        }
+      },
+      "local_classification": "PERFORMANCE_ONLY",
+      "other_metrics": {
+        "average_view_duration": null,
+        "comments": null,
+        "ctr": null,
+        "impressions": null,
+        "likes": null,
+        "retention": null,
+        "subscribers_gained": null,
+        "traffic_sources": null,
+        "watch_time": null
+      },
+      "provenance": [
+        {
+          "kind": "owner-provided evidence",
+          "notes": "Owner confirms Studio observations. Screenshot image itself was not supplied in this turn; values are transcribed in the request.",
+          "path": "C:\\Users\\DESKTOP\\.codex\\attachments\\ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c\\Pasted text.txt",
+          "sha256": "05709d3f35bdf4976923665af4c4509cc2dc3739d2e6ade90b89480e47ba3481"
+        }
+      ]
+    },
+    {
+      "evidence_id": "cc7cce9e-b84c-5876-a8a7-d25177d99cfc",
+      "fields": {
+        "actual_upload_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "category": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "channel": {
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "Minute Mysteries"
+        },
+        "content_structure": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "current_observed_views": {
+          "quality": "KNOWN",
+          "source": "owner Studio observation",
+          "value": 4
+        },
+        "description": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "description_character_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "explicit_hook": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_date": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_identity": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_run_id": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_run_linkage": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_timestamp": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "hashtag_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "hashtags": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "keywords": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "measured_duration_seconds": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "media_fingerprint": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "model": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "named_entities": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "narration_duration_seconds": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "narration_information": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "observed_at": {
+          "notes": "Date precision only; exact time/timezone not supplied",
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "2026-10-02"
+        },
+        "opening_text": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "output_filename": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "output_path": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "privacy_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "prompt": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "publication_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "published_at": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "queue_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "scene_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script_character_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script_word_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "sha256": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "title": {
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "The Enigmatic Blaze of Springfield Armory"
+        },
+        "title_character_count": {
+          "notes": "Unicode code points, including spaces and punctuation",
+          "quality": "DERIVED",
+          "source": "Python len(title)",
+          "value": 41
+        },
+        "title_word_count": {
+          "quality": "DERIVED",
+          "source": "whitespace split",
+          "value": 6
+        },
+        "topic": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_run_linkage": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_timestamp": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "video_date": {
+          "quality": "KNOWN",
+          "source": "owner Studio date; not exact publication time",
+          "value": "2026-10-01"
+        },
+        "youtube_video_id": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        }
+      },
+      "local_classification": "PERFORMANCE_ONLY",
+      "other_metrics": {
+        "average_view_duration": null,
+        "comments": null,
+        "ctr": null,
+        "impressions": null,
+        "likes": null,
+        "retention": null,
+        "subscribers_gained": null,
+        "traffic_sources": null,
+        "watch_time": null
+      },
+      "provenance": [
+        {
+          "kind": "owner-provided evidence",
+          "notes": "Owner confirms Studio observations. Screenshot image itself was not supplied in this turn; values are transcribed in the request.",
+          "path": "C:\\Users\\DESKTOP\\.codex\\attachments\\ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c\\Pasted text.txt",
+          "sha256": "05709d3f35bdf4976923665af4c4509cc2dc3739d2e6ade90b89480e47ba3481"
+        }
+      ]
+    },
+    {
+      "evidence_id": "03330475-a9ed-5a49-bc62-2766aeb8f641",
+      "fields": {
+        "actual_upload_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "category": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "channel": {
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "Minute Mysteries"
+        },
+        "content_structure": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "current_observed_views": {
+          "quality": "KNOWN",
+          "source": "owner Studio observation",
+          "value": 241
+        },
+        "description": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "description_character_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "explicit_hook": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_date": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_identity": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_run_id": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_run_linkage": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "generation_timestamp": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "hashtag_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "hashtags": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "keywords": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "measured_duration_seconds": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "media_fingerprint": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "model": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "named_entities": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "narration_duration_seconds": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "narration_information": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "observed_at": {
+          "notes": "Date precision only; exact time/timezone not supplied",
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "2026-10-02"
+        },
+        "opening_text": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "output_filename": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "output_path": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "privacy_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "prompt": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "publication_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "published_at": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "queue_slot": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "scene_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script_character_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "script_word_count": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "sha256": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "title": {
+          "quality": "KNOWN",
+          "source": "owner confirmation",
+          "value": "The Vanishing of the Beaumont Children"
+        },
+        "title_character_count": {
+          "notes": "Unicode code points, including spaces and punctuation",
+          "quality": "DERIVED",
+          "source": "Python len(title)",
+          "value": 38
+        },
+        "title_word_count": {
+          "quality": "DERIVED",
+          "source": "whitespace split",
+          "value": 6
+        },
+        "topic": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_run_linkage": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_status": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "upload_timestamp": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        },
+        "video_date": {
+          "quality": "KNOWN",
+          "source": "owner Studio date; not exact publication time",
+          "value": "2026-10-01"
+        },
+        "youtube_video_id": {
+          "quality": "UNKNOWN",
+          "source": "local audit",
+          "value": null
+        }
+      },
+      "local_classification": "PERFORMANCE_ONLY",
+      "other_metrics": {
+        "average_view_duration": null,
+        "comments": null,
+        "ctr": null,
+        "impressions": null,
+        "likes": null,
+        "retention": null,
+        "subscribers_gained": null,
+        "traffic_sources": null,
+        "watch_time": null
+      },
+      "provenance": [
+        {
+          "kind": "owner-provided evidence",
+          "notes": "Owner confirms Studio observations. Screenshot image itself was not supplied in this turn; values are transcribed in the request.",
+          "path": "C:\\Users\\DESKTOP\\.codex\\attachments\\ae84396b-a05c-4bcb-b1ff-4a5b9f1a3a1c\\Pasted text.txt",
+          "sha256": "05709d3f35bdf4976923665af4c4509cc2dc3739d2e6ade90b89480e47ba3481"
+        }
+      ]
+    }
+  ]
+}
