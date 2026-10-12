@@ -87,7 +87,16 @@ def validate_state(state, day, generation_run=None, *, channel=MINUTE_MYSTERIES)
                     item.get('channel_key', channel.channel_key) == channel.channel_key, 'Media channel mismatch')
             require(record.get('artifact_name', '').startswith(channel.artifact_namespace + '-media-'), 'Media artifact channel mismatch')
             name = record.get('filename', '')
-            require(re.fullmatch(r'unsolved_mysteries_[0-9]{14}\.mp4', name), 'Invalid media filename')
+            # Match the existing pipeline contract; punctuation in topic is literal.
+            prefix = channel.topic_theme.replace(' ', '_').lower()
+            require(isinstance(name, str) and '/' not in name and '\\' not in name,
+                    'Invalid media filename')
+            match = re.fullmatch(re.escape(prefix) + r'_([0-9]{14})\.mp4', name)
+            require(match is not None, 'Invalid media filename')
+            try:
+                datetime.strptime(match.group(1), '%Y%m%d%H%M%S')
+            except ValueError:
+                raise ProductionError('Invalid media filename timestamp') from None
             require(valid_slot_owner(record.get("owner"), channel, day, item["slot"]) and record.get('kind') == 'rendered_video',
                     'Media owner mismatch')
             require(isinstance(record.get('artifact_id'), int) and isinstance(record.get('run_id'), int),

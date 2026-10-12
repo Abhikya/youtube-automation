@@ -49,6 +49,51 @@ class ChannelStateTests(unittest.TestCase):
     def pending_state(self):
         return {'schema':1,'date':str(DAY),'generation_run_id':100,'privacy_status':'private','queue':self.legacy_queue(),'idea_memory':{}}
 
+    def media_state(self, channel, filename):
+        from config.channels import slot_owner
+        state=self.pending_state()
+        if channel != MINUTE_MYSTERIES:
+            state.update(channel_identity(channel))
+            state['queue'].update(channel_identity(channel))
+        item=state['queue']['videos'][0]
+        item.update(generation_status='ready',metadata={'Title':'Title','Description':'Description','Hashtags':['#shorts']})
+        item['generated_files']=[{'filename':filename,'channel_key':channel.channel_key,
+            'artifact_name':channel.artifact_namespace+'-media-test','owner':slot_owner(channel,DAY,item['slot']),
+            'kind':'rendered_video','artifact_id':1,'run_id':100,'sha256':'a'*64,'size_bytes':10,'mtime_ns':1}]
+        return state
+
+    def test_channel_filename_contract_accepts_legacy_and_space_science(self):
+        from config.channels import resolve_channel_config
+        for channel,name in ((MINUTE_MYSTERIES,'unsolved_mysteries_20260914050000.mp4'),
+            (resolve_channel_config('space_science'),'astronomy,_space_mysteries,_strange_science_20261012113108.mp4')):
+            with self.subTest(channel=channel.channel_key):
+                validate_state(self.media_state(channel,name),DAY,channel=channel)
+
+    def test_malformed_media_names_and_timestamps_rejected(self):
+        from config.channels import resolve_channel_config
+        for channel in (MINUTE_MYSTERIES,resolve_channel_config('space_science')):
+            prefix=channel.topic_theme.replace(' ','_').lower()
+            for name in ('arbitrary_20261012113108.mp4',prefix+'_bad.mp4',prefix+'_2026101211310.mp4',
+                         prefix+'_20261012113108.mov',prefix+'_20261012113108.MP4',
+                         '../'+prefix+'_20261012113108.mp4','folder/'+prefix+'_20261012113108.mp4',
+                         'folder\\'+prefix+'_20261012113108.mp4',prefix+'_20260230113108.mp4',
+                         prefix+'_20261012253108.mp4',prefix+'_20261012113108.mp4.extra'):
+                with self.subTest(channel=channel.channel_key,name=name),self.assertRaises(ProductionError):
+                    validate_state(self.media_state(channel,name),DAY,channel=channel)
+
+    def test_cross_channel_media_filename_and_ownership_remain_rejected(self):
+        from config.channels import resolve_channel_config
+        channel=resolve_channel_config('space_science')
+        with self.assertRaises(ProductionError):
+            validate_state(self.media_state(channel,'unsolved_mysteries_20261012113108.mp4'),DAY,channel=channel)
+        name='astronomy,_space_mysteries,_strange_science_20261012113108.mp4'
+        for fields in ({'channel_key':'minute_mysteries'},{'artifact_name':'mystery-media-test'},
+                       {'owner':'minute_mysteries:2026-09-14:10:00'}):
+            state=self.media_state(channel,name)
+            state['queue']['videos'][0]['generated_files'][0].update(fields)
+            with self.subTest(fields=fields),self.assertRaises(ProductionError):
+                validate_state(state,DAY,channel=channel)
+
     def test_legacy_state_only_default_and_partial_identity_rejected(self):
         state=self.pending_state();validate_state(state,DAY)
         with self.assertRaises(ProductionError):validate_state(state,DAY,channel=self.other)
