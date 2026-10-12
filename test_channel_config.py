@@ -45,6 +45,36 @@ class ChannelConfigTests(unittest.TestCase):
             self.assertNotEqual(getattr(paths,field),getattr(legacy,field))
         self.assertEqual(paths.memory,Path.cwd()/"data"/"channels"/"space_science"/"idea_memory.json")
 
+    def test_registered_hidden_history_identity_and_three_channel_isolation(self):
+        from pathlib import Path
+        from config.channels import HIDDEN_HISTORY, SPACE_SCIENCE, RuntimePaths
+        c=resolve_channel_config("hidden_history")
+        self.assertIs(c,HIDDEN_HISTORY)
+        self.assertEqual(c.channel_name,"hiddenhistory")
+        self.assertEqual(c.youtube_channel_id,"UCWsMUjiZ7q07Bb-MKhXojDw")
+        self.assertEqual(c.credential_reference,"YOUTUBE_TOKEN_HIDDEN_HISTORY_B64")
+        self.assertEqual(c.topic_theme,"forgotten history, unusual historical incidents, strange moments from history")
+        self.assertEqual(c.content_instructions,"Factual, concise, curiosity-driven historical storytelling. Focus on lesser-known real historical events and unusual incidents. Avoid sensational claims that are not historically supportable.")
+        self.assertEqual(c.timezone,"Asia/Kolkata")
+        self.assertEqual(c.publication_slots,("10:00","14:00","19:00"))
+        channels=[resolve_channel_config(key) for key in ("minute_mysteries","space_science","hidden_history")]
+        self.assertIs(channels[0],MINUTE_MYSTERIES);self.assertIs(channels[1],SPACE_SCIENCE)
+        for field in ("state_namespace","artifact_namespace","output_namespace","credential_reference"):
+            self.assertEqual(len({getattr(channel,field) for channel in channels}),3)
+        paths=[RuntimePaths(channel,Path.cwd()) for channel in channels]
+        for field in ("output","temp","audio","clips","subtitles","memory"):
+            self.assertEqual(len({getattr(path,field) for path in paths}),3)
+        self.assertEqual(paths[2].memory,Path.cwd()/"data"/"channels"/"hidden_history"/"idea_memory.json")
+
+    def test_hidden_history_shared_filename_contract(self):
+        from config.channels import rendered_media_filename,validate_rendered_media_filename
+        channel=resolve_channel_config("hidden_history")
+        name=rendered_media_filename(channel,"20261013100500")
+        self.assertEqual(name,"forgotten_history,_unusual_historical_incidents,_strange_moments_from_history_20261013100500.mp4")
+        validate_rendered_media_filename(name,channel)
+        for other in (MINUTE_MYSTERIES,resolve_channel_config("space_science")):
+            with self.assertRaises(ValueError):validate_rendered_media_filename(name,other)
+
     def test_unknown_key(self):
         with self.assertRaisesRegex(ValueError,"Unknown channel key"):resolve_channel_config("missing")
 

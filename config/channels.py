@@ -117,7 +117,28 @@ SPACE_SCIENCE = ChannelConfig(
     telegram_chat_reference="TELEGRAM_CHAT_SPACE_SCIENCE_ID",
     telegram_credential_reference="TELEGRAM_BOT_SPACE_SCIENCE_TOKEN",
 )
-CHANNEL_CONFIGS = (MINUTE_MYSTERIES, SPACE_SCIENCE)
+# Registration only; Hidden History cron is not enabled by this config.
+HIDDEN_HISTORY = ChannelConfig(
+    channel_key="hidden_history",
+    channel_name="hiddenhistory",
+    youtube_channel_id="UCWsMUjiZ7q07Bb-MKhXojDw",
+    credential_reference="YOUTUBE_TOKEN_HIDDEN_HISTORY_B64",
+    topic_theme="forgotten history, unusual historical incidents, strange moments from history",
+    content_instructions=(
+        "Factual, concise, curiosity-driven historical storytelling. Focus on lesser-known "
+        "real historical events and unusual incidents. Avoid sensational claims that are "
+        "not historically supportable."
+    ),
+    timezone="Asia/Kolkata",
+    publication_slots=("10:00", "14:00", "19:00"),
+    preparation_times=MINUTE_MYSTERIES.preparation_times,
+    state_namespace=".actions-work-hidden-history",
+    artifact_namespace="hidden-history",
+    output_namespace="output/hidden_history",
+    telegram_chat_reference="TELEGRAM_CHAT_HIDDEN_HISTORY_ID",
+    telegram_credential_reference="TELEGRAM_BOT_HIDDEN_HISTORY_TOKEN",
+)
+CHANNEL_CONFIGS = (MINUTE_MYSTERIES, SPACE_SCIENCE, HIDDEN_HISTORY)
 
 
 def resolve_channel_config(channel_key: str, *, configs: Sequence[ChannelConfig] | None = None) -> ChannelConfig:
