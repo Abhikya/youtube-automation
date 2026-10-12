@@ -346,42 +346,56 @@ class Production:
     def checkpoint(self, day, data):
         validate_channel_identity(data, self.channel, allow_legacy=self.channel == MINUTE_MYSTERIES)
         require(not self.poisoned and day == self.day, 'State checkpoint is blocked')
+        stage = 'latest_state_lookup'
         try:
             current = self.store.latest(day)
             if (current['id'] if current else None) != self.latest_id:
                 raise StaleStateConflict(self.state, data)
+            stage = 'snapshot_queue'
             snapshot = copy.deepcopy(data)
             for item in snapshot['videos']:
                 if item['generation_status'] != 'ready':
                     continue
+                stage = 'validate_media_target'
                 slot = item['slot']
                 if slot not in self.media:
                     refs = Counter(v['video_path'] for v in snapshot['videos'] if v.get('video_path'))
                     path = _validated_target(item, day, self.output, refs, channel=self.channel)
                     require(path.is_file(), 'Generated media missing before checkpoint')
                     name = f'{self.channel.artifact_namespace}-media-{day}-{SLOT_NAMES[slot]}-{self.store.run_id}-{uuid.uuid4().hex}'
+                    stage = 'upload_media_artifact'
                     artifact = self.store.upload(name, path, MEDIA_DAYS)
+                    stage = 'record_media_artifact'
                     record = copy.deepcopy(item['generated_files'][0])
                     record.update(filename=path.name, artifact_id=artifact['id'],
                                   run_id=self.store.run_id, artifact_name=name)
                     self.media[slot] = record
                 item['generated_files'] = [copy.deepcopy(self.media[slot])]
+            stage = 'read_idea_memory'
             memory = json.loads(self.memory.read_text(encoding='utf-8')) if self.memory.exists() else {}
+            stage = 'build_state'
             state = {'schema': 1, 'date': str(day), 'generation_run_id': self.state['generation_run_id'] if self.state else self.store.run_id,
                      'privacy_status': self.state['privacy_status'] if self.state else os.getenv('YOUTUBE_PRIVACY_STATUS', 'private'),
                      'queue': snapshot, 'idea_memory': memory, 'previous_state_id': self.latest_id, **channel_identity(self.channel)}
+            stage = 'validate_state'
             validate_state(state, day, channel=self.channel)
+            stage = 'write_state_file'
             path = self.scratch / 'state.json'
             path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
             name = f'{self.channel.artifact_namespace}-state-{day}-{self.store.run_id}-{uuid.uuid4().hex}'
+            stage = 'upload_state_artifact'
             artifact = self.store.upload(name, path, STATE_DAYS)
+            stage = 'confirm_state'
             confirmed = getattr(self.store, '_confirmed_checkpoints', {})
             confirmed[artifact['id']] = copy.deepcopy(artifact)
             self.store._confirmed_checkpoints = confirmed
             self.latest_id, self.state = artifact['id'], state
-        except Exception:
+        except Exception as exc:
             self.poisoned = True
-            raise
+            if isinstance(exc, ProductionError):
+                raise
+            # Never expose arbitrary exception text, payloads, URLs or paths.
+            raise ProductionError(f'Checkpoint stage {stage} failed ({type(exc).__name__})') from None
 
     def generate(self, generator=None, *, max_attempts=2, passes=2, complete=True, context=None, before_generation=None, generation_allowed=None):
         if generator is None:

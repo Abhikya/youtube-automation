@@ -675,3 +675,59 @@ class NewArtifactConfirmationTests(unittest.TestCase):
         with self.assertRaisesRegex(ProductionError, "HTTP 404"):
             self.confirm([self.response(200),self.response(404)])
         self.assertEqual(self.store.session.request.call_count,2)
+
+
+class CheckpointDiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.store=Store();self.controller=Production(self.store,DAY,Path(self.temp.name))
+        self.data={'date':str(DAY),'timezone':'Asia/Kolkata','videos':[
+            {'slot':slot,'generation_status':'pending','upload_status':'pending'}
+            for slot in ('10:00','14:00','19:00')]}
+
+    def test_unexpected_lookup_exception_is_safe_and_poisoned(self):
+        import traceback
+        secret='SECRET response body https://secret.example/token?password=hidden'
+        with patch.object(self.store,'latest',side_effect=KeyError(secret)):
+            with self.assertRaises(ProductionError) as caught:self.controller.checkpoint(DAY,self.data)
+        self.assertEqual(str(caught.exception),'Checkpoint stage latest_state_lookup failed (KeyError)')
+        self.assertNotIn(secret,''.join(traceback.format_exception(caught.exception)))
+        self.assertTrue(self.controller.poisoned);self.assertEqual(self.store.saved,[])
+
+    def test_state_upload_and_confirmation_stages_are_safe(self):
+        for error,result,stage,kind in ((OSError('secret body'),None,'upload_state_artifact','OSError'),(None,{},'confirm_state','KeyError')):
+            controller=Production(Store(),DAY,Path(self.temp.name))
+            with patch.object(controller.store,'upload',side_effect=error,return_value=result) as upload:
+                with self.assertRaises(ProductionError) as caught:controller.checkpoint(DAY,self.data)
+            self.assertEqual(str(caught.exception),f'Checkpoint stage {stage} failed ({kind})')
+            upload.assert_called_once();self.assertTrue(controller.poisoned)
+            self.assertIsNone(controller.latest_id)
+
+    def test_production_errors_and_stale_conflicts_preserve_identity(self):
+        for error in (ProductionError('safe validation'),run_actions.ArtifactAPIError(404,'actions/artifacts/1'),run_actions.StaleStateConflict(None,self.data)):
+            controller=Production(Store(),DAY,Path(self.temp.name))
+            with patch.object(controller.store,'latest',side_effect=error):
+                with self.assertRaises(type(error)) as caught:controller.checkpoint(DAY,self.data)
+            self.assertIs(caught.exception,error);self.assertTrue(controller.poisoned)
+
+    def test_queue_wrap_preserves_sanitized_stage_for_main(self):
+        self.controller.queue.checkpoint=self.controller.checkpoint
+        with patch.object(self.store,'latest',side_effect=RuntimeError('credential secret')):
+            with self.assertRaises(CheckpointError) as caught:
+                self.controller.queue.update(DAY,lambda _:self.data)
+        self.assertIsInstance(caught.exception.__cause__,ProductionError)
+        self.assertEqual(str(caught.exception.__cause__),'Checkpoint stage latest_state_lookup failed (RuntimeError)')
+
+
+    def test_media_target_and_upload_stages(self):
+        for stage in ('validate_media_target','upload_media_artifact'):
+            controller=Production(Store(),DAY,Path(self.temp.name))
+            data=copy.deepcopy(self.data)
+            path=controller.output/'unsolved_mysteries_20260914050000.mp4';path.write_bytes(b'render')
+            data['videos'][0].update(generation_status='ready',video_path=str(path))
+            with patch('run_actions._validated_target',side_effect=ValueError('secret path') if stage=='validate_media_target' else None,return_value=path),patch.object(controller.store,'upload',side_effect=KeyError('secret payload')) as upload:
+                with self.assertRaises(ProductionError) as caught:controller.checkpoint(DAY,data)
+            kind='ValueError' if stage=='validate_media_target' else 'KeyError'
+            self.assertEqual(str(caught.exception),f'Checkpoint stage {stage} failed ({kind})')
+            self.assertTrue(controller.poisoned)
+            self.assertEqual(upload.call_count,0 if stage=='validate_media_target' else 1)
