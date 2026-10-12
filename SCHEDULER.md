@@ -149,7 +149,8 @@ Deletion requires ALL of:
   `youtube.status == "uploaded"`, and a nonempty YouTube video ID;
 - a matching generation-time file manifest owned by this queue date/slot;
 - a canonical absolute path directly inside `output/videos`, with the pipeline's
-  `unsolved_mysteries_YYYYMMDDHHMMSS.mp4` naming;
+  `<channel topic with spaces replaced by underscores, lowercase>_YYYYMMDDHHMMSS.mp4` naming
+  (Minute Mysteries legacy example: `unsolved_mysteries_YYYYMMDDHHMMSS.mp4`);
 - a matching SHA-256, size, and modification time for an existing file, and no other
   reference to the file in the scanned queues.
 

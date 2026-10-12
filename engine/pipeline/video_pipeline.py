@@ -1,4 +1,4 @@
-from config.channels import RuntimePaths, MINUTE_MYSTERIES
+from config.channels import RuntimePaths, MINUTE_MYSTERIES, rendered_media_filename
 from config.settings import BASE_DIR
 
 from engine.uploader.youtube_uploader import upload_generated_video
@@ -60,11 +60,9 @@ def generate_video(topic=None, idea=None, *, publish=True, runtime_paths=None):
 
     music_path = select_background_music()
 
-    safe_topic = topic.replace(" ", "_").lower()
-    
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 
-    filename = f"{safe_topic}_{timestamp}.mp4"
+    filename = rendered_media_filename(channel, timestamp)
 
     output_video_path = str(paths.output / filename)
 

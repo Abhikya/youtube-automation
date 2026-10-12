@@ -167,3 +167,85 @@ class ChannelStateTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class ChannelMediaLifecycleTests(unittest.TestCase):
+    def setUp(self):
+        from config.channels import resolve_channel_config, RuntimePaths
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name).resolve()
+        self.channel=resolve_channel_config('space_science')
+        self.paths=RuntimePaths(self.channel,self.root);self.paths.prepare()
+        self.name='astronomy,_space_mysteries,_strange_science_20261012151710.mp4'
+
+    def item(self, path=None):
+        path=path or self.paths.output/self.name
+        path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'space render')
+        return {'slot':'10:00','channel_key':self.channel.channel_key,'generation_status':'ready',
+            'upload_status':'pending','video_path':str(path),
+            'metadata':{'Title':'Space','Description':'Science','Hashtags':['#shorts']},
+            'generated_files':[record_generated_file(path,DAY,'10:00',channel=self.channel)]}
+
+    def validate(self,item,references=None):
+        return _validated_target(item,DAY,self.paths.output,references or {item['video_path']:1},channel=self.channel)
+
+    def test_space_target_and_shared_filename_contract(self):
+        from config.channels import rendered_media_filename,validate_rendered_media_filename
+        self.assertEqual(rendered_media_filename(self.channel,'20261012151710'),self.name)
+        validate_rendered_media_filename(self.name,self.channel)
+        validate_rendered_media_filename('unsolved_mysteries_20260914050000.mp4',MINUTE_MYSTERIES)
+        item=self.item();self.assertEqual(self.validate(item),Path(item['video_path']))
+
+    def test_wrong_names_extensions_and_timestamps_rejected(self):
+        for name in ('arbitrary_20261012151710.mp4',self.name.replace('.mp4','.mov'),
+                     self.name.replace('20261012151710','20260230151710'),
+                     self.name.replace('20261012151710','20261012251710'),
+                     self.name.replace('20261012151710','2026101215171'),
+                     'unsolved_mysteries_20261012151710.mp4'):
+            with self.subTest(name=name),self.assertRaises(ValueError):self.validate(self.item(self.paths.output/name))
+
+    def test_traversal_and_outside_directory_rejected(self):
+        item=self.item();item['video_path']=item['generated_files'][0]['path']=str(self.paths.output/'..'/'space_science'/self.name)
+        with self.assertRaises(ValueError):self.validate(item)
+        for path in (self.root/self.name,self.paths.output/'nested'/self.name):
+            with self.subTest(path=path),self.assertRaises(ValueError):self.validate(self.item(path))
+
+    def test_owner_duplicate_and_fingerprint_guards_unchanged(self):
+        for fields in ({'channel_key':'minute_mysteries'},{'owner':'minute_mysteries:2026-09-14:10:00'},
+                       {'owner':'space_science:2026-09-14:14:00'},{'sha256':'b'*64}):
+            item=self.item();item['generated_files'][0].update(fields)
+            with self.subTest(fields=fields),self.assertRaises(ValueError):self.validate(item)
+        item=self.item()
+        with self.assertRaises(ValueError):self.validate(item,{item['video_path']:2})
+        Path(item['video_path']).write_bytes(b'modified')
+        with self.assertRaises(ValueError):self.validate(item)
+
+    def test_space_checkpoint_restore_and_cleanup_end_to_end(self):
+        from config.channels import rendered_media_filename
+        from engine.scheduling.cleanup import cleanup_recent
+        from datetime import datetime,timedelta
+        from zoneinfo import ZoneInfo
+        store=Store();controller=Production(store,DAY,self.root,channel=self.channel)
+        count=[0]
+        def generate():
+            count[0]+=1
+            path=controller.output/rendered_media_filename(self.channel,f'20260914050{count[0]}00')
+            path.write_bytes(b'render'+bytes([count[0]]))
+            return {'video_path':str(path),'metadata':{'Title':'Space','Description':'Science','Hashtags':['#shorts']},'idea':'Signal','script':'Known facts'}
+        self.assertEqual(controller.generate(generate)['status'],'ready')
+        self.assertFalse(controller.poisoned);self.assertEqual(count[0],3)
+        validate_state(controller.state,DAY,channel=self.channel)
+        restored=Production(store,DAY,self.root/'restored',channel=self.channel)
+        restored.load();restored.restore_media(list(self.channel.publication_slots))
+        data=restored.queue.read(DAY)
+        now=datetime(2026,9,16,10,tzinfo=ZoneInfo('Asia/Kolkata'))
+        for item in data['videos']:
+            self.assertTrue(Path(item['video_path']).is_file())
+            item.update(upload_status='uploaded',successful_upload_at=(now-timedelta(hours=30)).isoformat(),
+                        youtube={'success':True,'status':'uploaded','video_id':'known-'+item['slot']})
+        restored.queue.update(DAY,lambda _:data)
+        result=cleanup_recent(restored.queue,now=now,approved_dir=restored.output)
+        self.assertEqual(result['items_updated'],3)
+        for item in restored.queue.read(DAY)['videos']:
+            self.assertEqual(item['cleanup']['status'],'completed');self.assertFalse(Path(item['video_path']).exists())
+        self.assertTrue(all(Path(item['video_path']).exists() for item in controller.state['queue']['videos']))

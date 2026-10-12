@@ -12,7 +12,7 @@ from filelock import FileLock, Timeout
 from config.settings import (OUTPUT_VIDEO_DIR, SCHEDULER_TIMEZONE,
                              CLEANUP_AFTER_HOURS, CLEANUP_SCAN_DAYS, UPLOAD_TIMES)
 
-from config.channels import MINUTE_MYSTERIES, RuntimePaths, slot_owner, valid_slot_owner
+from config.channels import MINUTE_MYSTERIES, RuntimePaths, slot_owner, valid_slot_owner, validate_rendered_media_filename
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,8 @@ def _validated_target(item, day, approved_dir, references, *, channel=MINUTE_MYS
         raise ValueError("Cleanup root does not match channel output namespace")
     # Only direct-child final MP4s matching this pipeline's naming are eligible.
     # No temp directories, assets, arbitrary extensions, or recursive deletion.
-    if path.parent != root or not re.fullmatch(r"unsolved_mysteries_[0-9]{14}\.mp4", path.name):
+    validate_rendered_media_filename(path.name, channel)
+    if path.parent != root:
         raise ValueError("Path is outside the approved final-render location/naming")
     if references.get(str(path), 0) != 1:
         raise ValueError("Generated file is referenced by another queue item")

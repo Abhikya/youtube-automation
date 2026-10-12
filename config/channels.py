@@ -238,3 +238,28 @@ class RuntimePaths:
         self.__post_init__()
         for path in (self.audio, self.clips, self.subtitles, self.output, self.memory.parent):
             path.mkdir(parents=True, exist_ok=True)
+
+
+
+def rendered_media_filename(channel, timestamp):
+    """Existing pipeline filename contract, including legacy topic punctuation."""
+    from datetime import datetime
+    if not isinstance(timestamp, str) or not re.fullmatch(r"[0-9]{14}", timestamp):
+        raise ValueError("Invalid media filename timestamp")
+    try:
+        datetime.strptime(timestamp, "%Y%m%d%H%M%S")
+    except ValueError:
+        raise ValueError("Invalid media filename timestamp") from None
+    prefix = channel.topic_theme.replace(" ", "_").lower()
+    if "/" in prefix or "\\" in prefix:
+        raise ValueError("Invalid media filename topic")
+    return f"{prefix}_{timestamp}.mp4"
+
+
+def validate_rendered_media_filename(name, channel):
+    """Reject paths, arbitrary names and invalid dates; never establish ownership."""
+    if not isinstance(name, str) or "/" in name or "\\" in name:
+        raise ValueError("Invalid media filename")
+    match = re.fullmatch(r".+_([0-9]{14})\.mp4", name)
+    if match is None or name != rendered_media_filename(channel, match.group(1)):
+        raise ValueError("Invalid media filename")
