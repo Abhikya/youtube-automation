@@ -100,14 +100,31 @@ MINUTE_MYSTERIES = ChannelConfig(
     telegram_chat_reference="TELEGRAM_CHAT_ID",
     telegram_credential_reference="TELEGRAM_BOT_TOKEN",
 )
-CHANNEL_CONFIGS = (MINUTE_MYSTERIES,)
+# Registered for explicit manual testing only; no automatic trigger is added.
+SPACE_SCIENCE = ChannelConfig(
+    channel_key="space_science",
+    channel_name="Space and Strange Science",
+    youtube_channel_id="UCfs8yJirS4w54IEiwSlM9xA",
+    credential_reference="YOUTUBE_TOKEN_SPACE_SCIENCE_B64",
+    topic_theme="astronomy, space mysteries, strange science",
+    content_instructions="Factual, curiosity-driven, science-focused storytelling.",
+    timezone="Asia/Kolkata",
+    publication_slots=("10:00", "14:00", "19:00"),
+    preparation_times=MINUTE_MYSTERIES.preparation_times,
+    state_namespace=".actions-work-space-science",
+    artifact_namespace="space-science",
+    output_namespace="output/space_science",
+    telegram_chat_reference="TELEGRAM_CHAT_SPACE_SCIENCE_ID",
+    telegram_credential_reference="TELEGRAM_BOT_SPACE_SCIENCE_TOKEN",
+)
+CHANNEL_CONFIGS = (MINUTE_MYSTERIES, SPACE_SCIENCE)
 
 
 def resolve_channel_config(channel_key: str, *, configs: Sequence[ChannelConfig] | None = None) -> ChannelConfig:
     """Validate the entire registry before lookup; never load secrets or run code.
 
-    Optional configs supports offline validation/future registries, not runtime
-    multi-channel enablement. Production resolves only the existing default.
+    Optional configs supports offline validation/future registries. Registration
+    does not configure automatic scheduling; callers select a channel explicitly.
     """
     registry = CHANNEL_CONFIGS if configs is None else configs
     keys = set()

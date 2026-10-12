@@ -107,4 +107,39 @@ class CredentialTests(unittest.TestCase):
             auth.assert_not_called()
 
 
+class AuthorizationCliTests(unittest.TestCase):
+    def test_default_and_space_science_authorization(self):
+        from config.channels import resolve_channel_config
+        for key,args in (("minute_mysteries",["--authorize"]),("space_science",["--authorize","--channel-key","space_science"])):
+            channel=resolve_channel_config(key)
+            service=Mock()
+            service.channels.return_value.list.return_value.execute.return_value={"items":[{"id":channel.youtube_channel_id,"snippet":{"title":channel.channel_name}}]}
+            with tempfile.TemporaryDirectory() as root,patch.object(yt,"YOUTUBE_TOKEN_FILE",str(Path(root)/"token.pickle")),patch.object(yt,"get_authenticated_service",return_value=service) as auth,patch("builtins.print") as output:
+                self.assertEqual(yt.main(args),0)
+                context=auth.call_args.kwargs["credential_context"]
+                self.assertEqual(context.channel,channel)
+                self.assertTrue(auth.call_args.kwargs["allow_interactive"])
+                expected=Path(root)/"token.pickle" if key=="minute_mysteries" else Path(root)/".credentials"/key/"token.pickle"
+                self.assertEqual(context.token_file,expected)
+                self.assertTrue(expected.parent.is_dir())
+                output.assert_any_call("Token file:",expected)
+                output.assert_any_call("Authenticated channel ID:",channel.youtube_channel_id)
+            service.channels.return_value.list.assert_called_once_with(part="id,snippet",mine=True)
+            service.videos.assert_not_called()
+            service.close.assert_called_once()
+
+    def test_channel_mismatch_fails_closed(self):
+        service=Mock()
+        service.channels.return_value.list.return_value.execute.return_value={"items":[{"id":MINUTE_MYSTERIES.youtube_channel_id}]}
+        with tempfile.TemporaryDirectory() as root,patch.object(yt,"YOUTUBE_TOKEN_FILE",str(Path(root)/"token.pickle")),patch.object(yt,"get_authenticated_service",return_value=service),patch("builtins.print"):
+            self.assertEqual(yt.main(["--authorize","--channel-key","space_science"]),1)
+        service.videos.assert_not_called();service.close.assert_called_once()
+
+    def test_unknown_key_fails_before_auth_or_directory_creation(self):
+        with patch.object(yt,"get_authenticated_service") as auth,patch.object(Path,"mkdir") as mkdir,patch("sys.stderr"):
+            with self.assertRaises(SystemExit) as error:yt.main(["--authorize","--channel-key","unknown"])
+        self.assertEqual(error.exception.code,2)
+        auth.assert_not_called();mkdir.assert_not_called()
+
+
 if __name__=='__main__':unittest.main()

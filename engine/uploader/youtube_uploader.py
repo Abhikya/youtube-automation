@@ -24,7 +24,7 @@ from config.settings import (
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from config.channels import MINUTE_MYSTERIES, ChannelConfig, validate_channel_scope
+from config.channels import MINUTE_MYSTERIES, ChannelConfig, validate_channel_scope, resolve_channel_config
 
 
 @dataclass(frozen=True)
@@ -337,11 +337,38 @@ def verify_prepared_video(video_id, expected_channel, publish_at, *, credential_
             service.close()
 
 
-if __name__ == "__main__":
+def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(description="Authorize the existing YouTube uploader; does not upload a video.")
     parser.add_argument("--authorize", action="store_true", required=True)
-    parser.parse_args()
-    service = get_authenticated_service(allow_interactive=True)
-    service.close()
-    print("YouTube authorization complete; token.pickle saved for subsequent uploads.")
+    parser.add_argument("--channel-key", default=MINUTE_MYSTERIES.channel_key)
+    args = parser.parse_args(argv)
+    try:
+        channel = resolve_channel_config(args.channel_key)
+    except ValueError:
+        parser.error("Unknown or invalid channel key")
+    context = YouTubeCredentialContext(channel=channel)
+    context.token_file.parent.mkdir(parents=True, exist_ok=True)
+    service = None
+    try:
+        service = get_authenticated_service(allow_interactive=True, credential_context=context)
+        channels = service.channels().list(part="id,snippet", mine=True).execute().get("items", [])
+        if [item.get("id") for item in channels] != [channel.youtube_channel_id]:
+            print("Authorization failed: authenticated YouTube channel does not match configured channel.")
+            return 1
+        print("Channel key:", channel.channel_key)
+        print("Authenticated channel name:", channels[0].get("snippet", {}).get("title", "Unknown"))
+        print("Authenticated channel ID:", channels[0]["id"])
+        print("Token file:", context.token_file)
+        return 0
+    except Exception as exc:
+        # OAuth/API errors may include credential contents; print only their type.
+        print("Authorization failed:", type(exc).__name__)
+        return 1
+    finally:
+        if service is not None:
+            service.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

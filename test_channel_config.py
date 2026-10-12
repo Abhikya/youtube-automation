@@ -25,6 +25,26 @@ class ChannelConfigTests(unittest.TestCase):
         self.assertEqual(c.telegram_chat_reference,"TELEGRAM_CHAT_ID")
         self.assertEqual(c.telegram_credential_reference,"TELEGRAM_BOT_TOKEN")
 
+    def test_registered_space_science_identity_and_runtime_isolation(self):
+        from pathlib import Path
+        from config.channels import RuntimePaths, SPACE_SCIENCE
+        c=resolve_channel_config("space_science")
+        self.assertIs(c, SPACE_SCIENCE)
+        self.assertEqual(c.channel_name,"Space and Strange Science")
+        self.assertEqual(c.youtube_channel_id,"UCfs8yJirS4w54IEiwSlM9xA")
+        self.assertEqual(c.credential_reference,"YOUTUBE_TOKEN_SPACE_SCIENCE_B64")
+        self.assertEqual(c.topic_theme,"astronomy, space mysteries, strange science")
+        self.assertEqual(c.content_instructions,"Factual, curiosity-driven, science-focused storytelling.")
+        self.assertEqual(c.timezone,"Asia/Kolkata")
+        self.assertEqual(c.publication_slots,("10:00","14:00","19:00"))
+        self.assertIs(resolve_channel_config("minute_mysteries"),MINUTE_MYSTERIES)
+        for field in ("state_namespace","artifact_namespace","output_namespace","credential_reference","telegram_chat_reference","telegram_credential_reference"):
+            self.assertNotEqual(getattr(c,field),getattr(MINUTE_MYSTERIES,field))
+        paths=RuntimePaths(c,Path.cwd());legacy=RuntimePaths(MINUTE_MYSTERIES,Path.cwd())
+        for field in ("output","temp","audio","clips","subtitles","memory"):
+            self.assertNotEqual(getattr(paths,field),getattr(legacy,field))
+        self.assertEqual(paths.memory,Path.cwd()/"data"/"channels"/"space_science"/"idea_memory.json")
+
     def test_unknown_key(self):
         with self.assertRaisesRegex(ValueError,"Unknown channel key"):resolve_channel_config("missing")
 
