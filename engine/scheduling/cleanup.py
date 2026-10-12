@@ -12,6 +12,8 @@ from filelock import FileLock, Timeout
 from config.settings import (OUTPUT_VIDEO_DIR, SCHEDULER_TIMEZONE,
                              CLEANUP_AFTER_HOURS, CLEANUP_SCAN_DAYS, UPLOAD_TIMES)
 
+from config.channels import MINUTE_MYSTERIES, RuntimePaths, slot_owner, valid_slot_owner
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,9 +41,9 @@ def _fingerprint(path):
     return {"sha256": digest, "size_bytes": after.st_size, "mtime_ns": after.st_mtime_ns}
 
 
-def record_generated_file(video_path, day, slot):
+def record_generated_file(video_path, day, slot, *, channel=MINUTE_MYSTERIES):
     path = _plain_path(video_path)
-    return {"kind": "rendered_video", "owner": f"{day.isoformat()}:{slot}",
+    return {"kind": "rendered_video", "owner": slot_owner(channel, day, slot), "channel_key": channel.channel_key,
             "path": str(path), **_fingerprint(path)}
 
 
@@ -68,18 +70,22 @@ def _eligible(item, now):
     return True
 
 
-def _validated_target(item, day, approved_dir, references):
+def _validated_target(item, day, approved_dir, references, *, channel=MINUTE_MYSTERIES):
     files = item.get("generated_files")
     if not isinstance(files, list) or len(files) != 1:
         raise ValueError("Exactly one recorded final-render ownership entry is required")
     record = files[0]
     if (record.get("kind") != "rendered_video" or item.get("slot") not in UPLOAD_TIMES
-            or record.get("owner") != f"{day.isoformat()}:{item['slot']}"):
+            or not valid_slot_owner(record.get("owner"), channel, day, item["slot"])):
         raise ValueError("Generated-file owner does not match queue date/slot")
+    if any(value.get("channel_key", channel.channel_key) != channel.channel_key for value in (item, record)):
+        raise ValueError("Cleanup channel ownership mismatch")
     path = _plain_path(record["path"])
     if path != _plain_path(item["video_path"]):
         raise ValueError("Generated-file record does not match this video's path")
     root = _plain_path(str(approved_dir))
+    if channel != MINUTE_MYSTERIES and root.parts[-len(Path(channel.output_namespace).parts):] != Path(channel.output_namespace).parts:
+        raise ValueError("Cleanup root does not match channel output namespace")
     # Only direct-child final MP4s matching this pipeline's naming are eligible.
     # No temp directories, assets, arbitrary extensions, or recursive deletion.
     if path.parent != root or not re.fullmatch(r"unsolved_mysteries_[0-9]{14}\.mp4", path.name):
@@ -97,13 +103,13 @@ def _validated_target(item, day, approved_dir, references):
     return path
 
 
-def _clean_item(item, day, now, approved_dir, references):
+def _clean_item(item, day, now, approved_dir, references, *, channel=MINUTE_MYSTERIES):
     previous = item.get("cleanup") or {}
     if previous.get("status") == "completed" or not _eligible(item, now):
         return False
     stamp = now.isoformat()
     try:
-        path = _validated_target(item, day, approved_dir, references)
+        path = _validated_target(item, day, approved_dir, references, channel=channel)
     except Exception as exc:
         logger.warning("Unsafe cleanup path rejected (%s): %r: %s", item.get("slot"), item.get("video_path"), exc)
         item["cleanup"] = {"status": "rejected", "last_attempt_at": stamp,
@@ -139,6 +145,9 @@ def _clean_item(item, day, now, approved_dir, references):
 
 
 def cleanup_recent(queue, now=None, approved_dir=OUTPUT_VIDEO_DIR):
+    if queue.channel != MINUTE_MYSTERIES and approved_dir == OUTPUT_VIDEO_DIR:
+        from config.settings import BASE_DIR
+        approved_dir = RuntimePaths(queue.channel, BASE_DIR).output
     now = now or datetime.now(ZoneInfo(SCHEDULER_TIMEZONE))
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("Cleanup time must be timezone-aware")
@@ -170,7 +179,7 @@ def cleanup_recent(queue, now=None, approved_dir=OUTPUT_VIDEO_DIR):
                         data = queue._read(day)
                         for item in data["videos"]:
                             try:
-                                if _clean_item(item, day, now, approved_dir, references):
+                                if _clean_item(item, day, now, approved_dir, references, channel=queue.channel):
                                     queue._write(day, data)
                                     changed += 1
                             except Exception:

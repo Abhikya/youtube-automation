@@ -7,11 +7,11 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def generate_script(idea, *, hook_strategy="BASELINE", baseline_script=None):
+def generate_script(idea, *, hook_strategy="BASELINE", baseline_script=None, channel_config=None):
     if hook_strategy not in {"BASELINE", "HOOK_EVENT_FIRST_V1"}:
         raise ValueError("Unknown hook strategy")
     if hook_strategy == "HOOK_EVENT_FIRST_V1":
-        source = baseline_script if baseline_script is not None else generate_script(idea)
+        source = baseline_script if baseline_script is not None else generate_script(idea, channel_config=channel_config)
         return rewrite_opening(idea, source)
     if baseline_script is not None:
         raise ValueError("baseline_script is only supported for experimental comparison")
@@ -31,6 +31,10 @@ Rules:
 - Do not invent evidence, quotes, or a definitive solution
 - Return only the spoken narration, without stage directions or headings
 """
+
+    if channel_config is not None:
+        prompt = prompt.replace("Mystery Shorts", "YouTube Shorts").replace("this unsolved mystery", "this topic")
+        prompt += f"\nChannel: {channel_config.channel_name}\nTopic: {channel_config.topic_theme}\nContent instructions: {channel_config.content_instructions}"
 
     response = client.chat.completions.create(
         model="gpt-4.1-mini",

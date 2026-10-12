@@ -17,7 +17,7 @@ from engine.uploader import youtube_uploader as youtube
 TZ = ZoneInfo("Asia/Kolkata")
 DAY = date(2026, 10, 3)
 NOW = datetime(2026, 10, 2, 9, 5, tzinfo=TZ)
-CHANNEL = "minute-mysteries-channel"
+CHANNEL = "UCR2L8UE-pc1Hd7U3AurrECQ"
 
 
 class PreparationTests(unittest.TestCase):
@@ -34,21 +34,21 @@ class PreparationTests(unittest.TestCase):
         self.verify = Mock(side_effect=self.verified)
         self.notify = Mock(return_value={"success": True})
 
-    def generate(self):
+    def generate(self, **kwargs):
         self.count += 1
         path = self.controller.output / f"unsolved_mysteries_2026100209{self.count:02d}00.mp4"
         path.write_bytes(f"media-{self.count}".encode())
         return {"video_path": str(path), "metadata": {"Title": "Mystery", "Description": "Saved description", "Hashtags": ["#Mystery"]},
                 "idea": "Idea", "script": "Script"}
 
-    def uploaded(self, path, metadata, publish_at):
+    def uploaded(self, path, metadata, publish_at, **kwargs):
         state = json.loads(self.store.latest(DAY)["bytes"])
         slot = next(v for v in state["queue"]["videos"] if publication_time(DAY, v["slot"]) == publish_at)
         self.assertEqual(slot["upload_status"], "uploading")
         return {"success": True, "status": "uploaded", "video_id": "id-" + slot["slot"],
                 "privacy_status": "private", "video_url": "https://example.invalid/video"}
 
-    def verified(self, video_id, channel, publish_at):
+    def verified(self, video_id, channel, publish_at, **kwargs):
         saved = json.loads(self.store.latest(DAY)["bytes"])["queue"]
         self.assertTrue(any((v.get("youtube") or {}).get("video_id") == video_id for v in saved["videos"]))
         return {"verified": True, "video_id": video_id, "channel_id": channel,
@@ -256,7 +256,7 @@ class PreparationTests(unittest.TestCase):
             value["video_id"]=next(vid for slot,vid in ids.items() if publication_time(DAY,slot)==stamp)
             return value
         self.upload.side_effect=upload
-        def processing(vid,channel,stamp):
+        def processing(vid,channel,stamp, **kwargs):
             value=self.verified(vid,channel,stamp)
             value.update(verified=False,processing_status="processing")
             return value
@@ -286,7 +286,7 @@ class PreparationTests(unittest.TestCase):
             self.assertEqual(v["youtube"]["video_id"],ids[v["slot"]])
             self.assertEqual(v["preparation_verification"]["verification_status"],"pending")
         for state in ("failed","terminated"):
-            def failed(vid,channel,stamp):
+            def failed(vid,channel,stamp, **kwargs):
                 value=self.verified(vid,channel,stamp)
                 value.update(verified=False,processing_status=state)
                 return value
@@ -581,7 +581,7 @@ class PreparationTests(unittest.TestCase):
         tomorrow = DAY + timedelta(days=1)
         primary = Mock()
         primary.prepare.return_value = {"status": "READY", "target_date": str(tomorrow), "no_op": True}
-        def factory(store, day):
+        def factory(store, day, **kwargs):
             self.assertIs(store, self.store)
             if day == DAY:
                 return recovery
@@ -734,7 +734,7 @@ class PreparationTests(unittest.TestCase):
         primary = Mock()
         primary.prepare.return_value = {"status":"READY", "target_date":str(DAY+timedelta(days=1))}
         order = []
-        def factory(store, day):
+        def factory(store, day, **kwargs):
             self.assertIs(store, self.store)
             order.append(day)
             return self.controller if day == DAY else primary
@@ -824,7 +824,7 @@ class PreparationTests(unittest.TestCase):
         import run_actions
         env = {"GITHUB_ACTIONS":"true", "GITHUB_REF":"refs/heads/main", "PRODUCTION_BRANCH":"main",
                "YOUTUBE_CHANNEL_ID":CHANNEL, "OPENAI_API_KEY":"fixture", "PEXELS_API_KEY":"fixture"}
-        def factory(store, day):
+        def factory(store, day, **kwargs):
             self.assertIs(store, self.store)
             self.assertEqual(day, DAY)
             return self.controller
@@ -854,7 +854,9 @@ class PreparationTests(unittest.TestCase):
             self.assertEqual(json.loads(output.getvalue())["status"],"READY")
             self.assertEqual(gen.call_count,3)
             self.assertEqual(self.upload.call_count,3)
-            preflight.assert_called_once_with(CHANNEL)
+            preflight.assert_called_once()
+            self.assertEqual(preflight.call_args.args, (CHANNEL,))
+            self.assertIs(preflight.call_args.kwargs["credential_context"], auth.call_args.args[0])
 
 
 class PolicyTests(unittest.TestCase):
@@ -912,6 +914,7 @@ class PolicyTests(unittest.TestCase):
                     "process.env.INPUT_OPERATION='wrong-environment-value';\n"
                     "(async()=>{\n"+script+"\n})().catch(error=>{process.stderr.write(error.message);process.exit(1)});")
                 result = subprocess.run([node,'-e',harness],text=True,capture_output=True,check=True)
+                expected[2:2] = ["--channel-key", "minute_mysteries"]
                 self.assertEqual(json.loads(result.stdout),{"command":"python","args":expected})
 
     def test_cli_explicit_target_and_ready_noop_without_generation_secrets(self):

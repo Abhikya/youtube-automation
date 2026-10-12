@@ -410,7 +410,7 @@ class ProductionTests(unittest.TestCase):
                          [])
         self.assertNotIn('35 * * * *', active)
         self.assertNotIn('22:00', active)
-        self.assertIn('group: mystery-production-state', active)
+        self.assertIn("group: production-${{ inputs.channel_key || 'minute_mysteries' }}", active)
         self.assertIn('cancel-in-progress: false', active)
         self.assertNotIn('run_scheduler.py', active)
         self.assertIn('YOUTUBE_PRIVACY_STATUS: private', active)

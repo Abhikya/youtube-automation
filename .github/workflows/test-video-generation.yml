@@ -2,6 +2,17 @@ name: Test single mystery video generation
 
 on:
   workflow_dispatch:
+    inputs:
+      channel_key:
+        description: Registered channel to test
+        required: false
+        type: string
+        default: minute_mysteries
+      upload_private:
+        description: Upload exactly one video privately (no public scheduling)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,7 +44,20 @@ jobs:
       - name: Install existing Python dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Generate exactly one mystery video without publishing
+      - name: Resolve selected channel
+        id: channel
+        env:
+          INPUT_CHANNEL_KEY: ${{ inputs.channel_key || 'minute_mysteries' }}
+        run: |
+          python - <<'PY'
+          import os
+          from config.channels import resolve_channel_config
+          channel = resolve_channel_config(os.environ['INPUT_CHANNEL_KEY'])
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'credential_reference={channel.credential_reference}\n')
+          PY
+
+      - name: Generate exactly one video and optionally upload privately
         id: generate
         timeout-minutes: 35
         env:
@@ -42,9 +66,15 @@ jobs:
           FFMPEG_BINARY: /usr/bin/ffmpeg
           IMAGEIO_FFMPEG_EXE: /usr/bin/ffmpeg
           PYTHONUNBUFFERED: '1'
+          INPUT_CHANNEL_KEY: ${{ inputs.channel_key || 'minute_mysteries' }}
+          INPUT_UPLOAD_PRIVATE: ${{ inputs.upload_private && 'true' || 'false' }}
+          SELECTED_YOUTUBE_TOKEN: ${{ inputs.upload_private && secrets[steps.channel.outputs.credential_reference] || '' }}
+          YOUTUBE_PRIVACY_STATUS: private
         run: |
           python - <<'PY'
           import os
+          import base64
+          import json
           from pathlib import Path
 
           for name in ("OPENAI_API_KEY", "PEXELS_API_KEY"):
@@ -53,16 +83,80 @@ jobs:
 
           from engine.pipeline.video_pipeline import generate_video
 
-          # Existing local generation-only path: one call, no publishing or jobs.
-          result = generate_video(publish=False)
+          from config.channels import resolve_channel_config, RuntimePaths
+          from config.settings import BASE_DIR, YOUTUBE_PRIVACY_STATUS
+          from engine.uploader.youtube_uploader import (
+              YouTubeCredentialContext, preparation_preflight, upload_video)
+
+          channel = resolve_channel_config(os.environ['INPUT_CHANNEL_KEY'])
+          paths = RuntimePaths(channel, BASE_DIR)
+          upload_private = os.environ['INPUT_UPLOAD_PRIVATE'] == 'true'
+          context = None
+          if upload_private:
+              if YOUTUBE_PRIVACY_STATUS != 'private':
+                  raise RuntimeError('Single-video test requires private privacy')
+              # A rerun may have an unknown successful insertion; never blindly repeat it.
+              if os.environ.get('GITHUB_RUN_ATTEMPT', '1') != '1':
+                  raise RuntimeError('Private upload reruns require manual outcome reconciliation; refused')
+              encoded = os.environ.get('SELECTED_YOUTUBE_TOKEN', '').strip()
+              if not encoded:
+                  raise RuntimeError('Selected channel OAuth secret is unavailable')
+              context = YouTubeCredentialContext(channel=channel)
+              context.token_file.parent.mkdir(parents=True, exist_ok=True)
+              context.token_file.write_bytes(base64.b64decode(encoded, validate=True))
+              preparation_preflight(channel.youtube_channel_id, credential_context=context)
+
+          # Exactly one render, no daily batch, queue, production state or scheduling.
+          result = generate_video(publish=False, runtime_paths=paths)
           video = Path(result["video_path"])
           if not video.is_file() or video.stat().st_size == 0:
               raise RuntimeError("Generation did not produce a nonempty video file")
+          receipt = Path('single-video-test.json')
+          result['channel_key'] = channel.channel_key
+          result['expected_channel_id'] = channel.youtube_channel_id
+          result['upload_status'] = 'not_requested'
+          receipt.write_text(json.dumps(result, indent=2), encoding='utf-8')
+          if upload_private:
+              # Save the claim before insertion; unknown outcomes are not retried.
+              result['upload_status'] = 'uploading_uncertain'
+              receipt.write_text(json.dumps(result, indent=2), encoding='utf-8')
+              metadata = result['metadata']
+              try:
+                  response = upload_video(str(video), metadata['Title'], metadata['Description'],
+                                          metadata['Hashtags'], credential_context=context)
+                  result['youtube_video_id'] = response['id']
+                  result['upload_status'] = 'uploaded'
+                  receipt.write_text(json.dumps(result, indent=2), encoding='utf-8')
+                  items = context.verified_service().videos().list(
+                      part='snippet,status', id=response['id']).execute().get('items', [])
+                  if (len(items) != 1 or items[0].get('id') != response['id']
+                          or items[0].get('snippet', {}).get('channelId') != channel.youtube_channel_id
+                          or items[0].get('status', {}).get('privacyStatus') != 'private'
+                          or items[0].get('status', {}).get('publishAt')):
+                      raise RuntimeError('Private upload verification failed; never blindly reupload')
+                  result['upload_verified'] = True
+                  receipt.write_text(json.dumps(result, indent=2), encoding='utf-8')
+                  print('Verified PRIVATE upload:', response['id'], 'channel:', channel.youtube_channel_id)
+              except Exception as exc:
+                  raise RuntimeError('Private upload stopped; inspect receipt before retrying (' + type(exc).__name__ + ')') from None
+              finally:
+                  context.close()
           size = video.stat().st_size
           print(f"Single video generation succeeded: {video.name} ({size:,} bytes)")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"size_bytes={size}\n")
           PY
+
+      - name: Retain single-video render and upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-video-test-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            single-video-test.json
+            output/**/*.mp4
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Report generation outcome
         if: always()

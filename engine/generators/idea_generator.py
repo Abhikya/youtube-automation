@@ -8,24 +8,24 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def load_memory():
-    if not os.path.exists(IDEA_MEMORY_FILE):
+def load_memory(memory_file=IDEA_MEMORY_FILE):
+    if not os.path.exists(memory_file):
         return {}
 
-    with open(IDEA_MEMORY_FILE, "r") as f:
+    with open(memory_file, "r") as f:
         return json.load(f)
 
 
-def save_memory(memory):
-    with open(IDEA_MEMORY_FILE, "w") as f:
+def save_memory(memory, memory_file=IDEA_MEMORY_FILE):
+    with open(memory_file, "w") as f:
         json.dump(memory, f, indent=2)
 
 
-def generate_video_ideas(topic=BASE_CONTENT_TOPIC):
-    if topic != BASE_CONTENT_TOPIC:
+def generate_video_ideas(topic=BASE_CONTENT_TOPIC, *, memory_file=None, channel_config=None):
+    if topic != (channel_config.topic_theme if channel_config is not None else BASE_CONTENT_TOPIC):
         raise ValueError(f"This automation only supports {BASE_CONTENT_TOPIC!r}.")
 
-    memory = load_memory()
+    memory = load_memory() if memory_file is None else load_memory(memory_file)
 
     previous_ideas = memory.get(topic, [])
 
@@ -43,6 +43,13 @@ Rules:
 - Do not invent evidence or present speculation as confirmed fact
 """
 
+    if channel_config is not None:
+        if memory_file is None:
+            raise ValueError("Channel generation requires an isolated idea memory path")
+        prompt = prompt.replace("Mystery Shorts", "YouTube Shorts").replace(
+            "Focus on documented unsolved mysteries", "Focus on documented facts within the configured topic")
+        prompt += f"\nChannel: {channel_config.channel_name}\nContent instructions: {channel_config.content_instructions}"
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
@@ -57,6 +64,6 @@ Rules:
 
     # Save updated memory
     memory.setdefault(topic, []).extend(new_ideas)
-    save_memory(memory)
+    save_memory(memory) if memory_file is None else save_memory(memory, memory_file)
 
     return new_ideas[:3]
