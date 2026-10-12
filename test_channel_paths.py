@@ -69,3 +69,71 @@ class ChannelPathTests(unittest.TestCase):
         upload.assert_not_called()
 
 if __name__ == "__main__": unittest.main()
+
+
+class SingleVideoChannelTests(unittest.TestCase):
+    def test_space_generators_receive_config_without_changing_default_prompts(self):
+        from config.channels import resolve_channel_config
+        from engine.generators import idea_generator,script_generator,metadata_generator
+        from types import SimpleNamespace
+        channel=resolve_channel_config("space_science")
+        response=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="A radio anomaly"))])
+        with tempfile.TemporaryDirectory() as root:
+            memory=Path(root)/"ideas.json"
+            for module,call in ((idea_generator,lambda:idea_generator.generate_video_ideas(channel.topic_theme,memory_file=memory,channel_config=channel)),(script_generator,lambda:script_generator.generate_script("A radio anomaly",channel_config=channel)),(metadata_generator,lambda:metadata_generator.generate_metadata("A radio anomaly",channel_config=channel))):
+                client=Mock();client.chat.completions.create.return_value=response
+                with patch.object(module,"client",client):call()
+                prompt=client.chat.completions.create.call_args.kwargs['messages'][0]['content']
+                self.assertIn(channel.channel_name,prompt);self.assertIn(channel.content_instructions,prompt)
+                self.assertNotIn("Mystery Shorts",prompt)
+
+    def workflow(self, *, before_mismatch=False, after_mismatch=False, upload=True, attempt="1"):
+        import os
+        from config.channels import resolve_channel_config
+        from engine.pipeline import video_pipeline
+        from engine.uploader import youtube_uploader as yt
+        channel=resolve_channel_config("space_science")
+        text=Path('.github/workflows/test-video-generation.yml').read_text()
+        code=text.split("          python - <<'PY'\n")[2].split("          PY",1)[0]
+        code="\n".join(line[10:] for line in code.splitlines())
+        with tempfile.TemporaryDirectory() as root:
+            root=Path(root); video=root/'space.mp4';video.write_bytes(b'render')
+            generated={'video_path':str(video),'metadata':{'Title':'Space','Description':'Science','Hashtags':['#shorts','#space']}}
+            service=Mock()
+            service.channels.return_value.list.return_value.execute.return_value={'items':[{'id':'wrong' if before_mismatch else channel.youtube_channel_id}]}
+            service.videos.return_value.list.return_value.execute.return_value={'items':[{'id':'known','snippet':{'channelId':'wrong' if after_mismatch else channel.youtube_channel_id},'status':{'privacyStatus':'private'}}]}
+            env={'INPUT_CHANNEL_KEY':'space_science','INPUT_UPLOAD_PRIVATE':'true' if upload else 'false','SELECTED_YOUTUBE_TOKEN':'Zml4dHVyZQ==','OPENAI_API_KEY':'fixture','PEXELS_API_KEY':'fixture','GITHUB_OUTPUT':str(root/'outputs'),'GITHUB_RUN_ATTEMPT':attempt}
+            old=os.getcwd()
+            try:
+                os.chdir(root)
+                with patch.dict(os.environ,env),patch.object(yt,'YOUTUBE_TOKEN_FILE',str(root/'token.pickle')),patch.object(yt.pickle,'load',return_value=Mock()),patch.object(yt,'get_authenticated_service',return_value=service),patch.object(video_pipeline,'generate_video',return_value=generated) as generate,patch.object(yt,'upload_video',return_value={'id':'known'}) as insert:
+                    failed=False
+                    try:exec(compile(code,'actual single-video workflow','exec'),{})
+                    except (RuntimeError,ValueError):failed=True
+                receipt=json.loads((root/'single-video-test.json').read_text()) if (root/'single-video-test.json').exists() else None
+            finally:os.chdir(old)
+            return failed,generate,insert,service,receipt
+
+    def test_actual_workflow_one_private_upload_and_verification(self):
+        failed,generate,insert,service,receipt=self.workflow()
+        self.assertFalse(failed);generate.assert_called_once();insert.assert_called_once()
+        self.assertFalse(generate.call_args.kwargs['publish'])
+        self.assertEqual(generate.call_args.kwargs['runtime_paths'].channel.channel_key,'space_science')
+        self.assertNotIn('publish_at',insert.call_args.kwargs)
+        self.assertEqual(insert.call_args.kwargs['credential_context'].channel.youtube_channel_id,'UCfs8yJirS4w54IEiwSlM9xA')
+        self.assertTrue(receipt['upload_verified']);self.assertEqual(receipt['youtube_video_id'],'known')
+        service.videos.return_value.list.assert_called_once_with(part='snippet,status',id='known')
+
+    def test_wrong_channel_blocks_before_generation_and_upload(self):
+        failed,generate,insert,_,_=self.workflow(before_mismatch=True)
+        self.assertTrue(failed);generate.assert_not_called();insert.assert_not_called()
+
+    def test_post_upload_mismatch_retains_id_and_never_retries(self):
+        failed,_,insert,_,receipt=self.workflow(after_mismatch=True)
+        self.assertTrue(failed);insert.assert_called_once();self.assertEqual(receipt['youtube_video_id'],'known')
+
+    def test_default_render_only_and_upload_rerun_refusal(self):
+        failed,generate,insert,service,_=self.workflow(upload=False)
+        self.assertFalse(failed);generate.assert_called_once();insert.assert_not_called();service.channels.assert_not_called()
+        failed,generate,insert,_,_=self.workflow(attempt='2')
+        self.assertTrue(failed);generate.assert_not_called();insert.assert_not_called()

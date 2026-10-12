@@ -21,8 +21,8 @@ def save_memory(memory, memory_file=IDEA_MEMORY_FILE):
         json.dump(memory, f, indent=2)
 
 
-def generate_video_ideas(topic=BASE_CONTENT_TOPIC, *, memory_file=None):
-    if topic != BASE_CONTENT_TOPIC:
+def generate_video_ideas(topic=BASE_CONTENT_TOPIC, *, memory_file=None, channel_config=None):
+    if topic != (channel_config.topic_theme if channel_config is not None else BASE_CONTENT_TOPIC):
         raise ValueError(f"This automation only supports {BASE_CONTENT_TOPIC!r}.")
 
     memory = load_memory() if memory_file is None else load_memory(memory_file)
@@ -42,6 +42,13 @@ Rules:
 - Distinguish known facts from theories; label folklore as folklore
 - Do not invent evidence or present speculation as confirmed fact
 """
+
+    if channel_config is not None:
+        if memory_file is None:
+            raise ValueError("Channel generation requires an isolated idea memory path")
+        prompt = prompt.replace("Mystery Shorts", "YouTube Shorts").replace(
+            "Focus on documented unsolved mysteries", "Focus on documented facts within the configured topic")
+        prompt += f"\nChannel: {channel_config.channel_name}\nContent instructions: {channel_config.content_instructions}"
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",

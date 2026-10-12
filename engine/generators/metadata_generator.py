@@ -8,7 +8,7 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
-def generate_metadata(script):
+def generate_metadata(script, *, channel_config=None):
     prompt = f"""
 Generate curiosity-driven Mystery Shorts metadata for this script.
 Keep the title and description faithful to the script.
@@ -27,6 +27,10 @@ Do not invent unrelated categories or put hashtags in the title or description.
 Script:
 {script}
 """
+
+    if channel_config is not None:
+        prompt = prompt.replace("Mystery Shorts", "YouTube Shorts")
+        prompt += f"\nChannel: {channel_config.channel_name}\nTopic: {channel_config.topic_theme}\nContent instructions: {channel_config.content_instructions}"
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",

@@ -24,9 +24,12 @@ from config.settings import (
 )
 
 
-def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True, runtime_paths=None):
-    if topic != BASE_CONTENT_TOPIC:
-        raise ValueError(f"This automation only supports {BASE_CONTENT_TOPIC!r}.")
+def generate_video(topic=None, idea=None, *, publish=True, runtime_paths=None):
+    channel = runtime_paths.channel if runtime_paths is not None else MINUTE_MYSTERIES
+    topic = channel.topic_theme if topic is None else topic
+    if topic != channel.topic_theme:
+        raise ValueError("Topic does not match channel configuration")
+    content_args = {} if channel == MINUTE_MYSTERIES else {"channel_config": channel}
 
     paths = runtime_paths or RuntimePaths(MINUTE_MYSTERIES, BASE_DIR)
     if publish and paths.channel != MINUTE_MYSTERIES:
@@ -34,12 +37,12 @@ def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True, 
     paths.prepare()
 
     if idea is None:
-        ideas = generate_video_ideas(topic, memory_file=paths.memory)
+        ideas = generate_video_ideas(topic, memory_file=paths.memory, **content_args)
         if not ideas:
             raise ValueError("No mystery ideas were returned; no media was generated.")
         idea = ideas[0]
 
-    script = generate_script(idea)
+    script = generate_script(idea, **content_args)
 
     audio_path = str(paths.audio / "voice.mp3")
 
@@ -76,7 +79,7 @@ def generate_video(topic: str = BASE_CONTENT_TOPIC, idea=None, *, publish=True, 
         temp_audiofile=str(paths.audio / (filename + ".render.m4a")),
     )
 
-    metadata = generate_metadata(script)
+    metadata = generate_metadata(script, **content_args)
 
     result = {
         "topic": topic,
