@@ -1,8 +1,10 @@
 """Validated channel configuration and shared durable ownership identity."""
+import json
+from pathlib import Path
 from collections.abc import Sequence
 import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ChannelConfig(BaseModel):
@@ -78,95 +80,130 @@ class ChannelConfig(BaseModel):
         return value
 
 
-MINUTE_MYSTERIES = ChannelConfig(
-    channel_key="minute_mysteries",
-    channel_name="Minute Mysteries",
-    youtube_channel_id="UCR2L8UE-pc1Hd7U3AurrECQ",
-    credential_reference="YOUTUBE_TOKEN_PICKLE_B64",
-    topic_theme="unsolved mysteries",
-    content_instructions=(
-        "Documented unsolved mysteries; curiosity-driven Shorts. Strong hook in first "
-        "3 seconds; around 80 words and 40 seconds; simple storytelling. Distinguish "
-        "known facts from theories and unresolved questions; label speculation and "
-        "folklore explicitly. Never invent evidence, quotes or a definitive solution. "
-        "Keep titles and descriptions faithful to the script."
-    ),
-    timezone="Asia/Kolkata",
-    publication_slots=("10:00", "14:00", "19:00"),
-    preparation_times=("05:05", "09:05", "13:05", "17:05", "21:05"),
-    state_namespace=".actions-work",
-    artifact_namespace="mystery",
-    output_namespace="output/videos",
-    telegram_chat_reference="TELEGRAM_CHAT_ID",
-    telegram_credential_reference="TELEGRAM_BOT_TOKEN",
-)
-# Registered for explicit manual testing only; no automatic trigger is added.
-SPACE_SCIENCE = ChannelConfig(
-    channel_key="space_science",
-    channel_name="Space and Strange Science",
-    youtube_channel_id="UCfs8yJirS4w54IEiwSlM9xA",
-    credential_reference="YOUTUBE_TOKEN_SPACE_SCIENCE_B64",
-    topic_theme="astronomy, space mysteries, strange science",
-    content_instructions="Factual, curiosity-driven, science-focused storytelling.",
-    timezone="Asia/Kolkata",
-    publication_slots=("10:00", "14:00", "19:00"),
-    preparation_times=MINUTE_MYSTERIES.preparation_times,
-    state_namespace=".actions-work-space-science",
-    artifact_namespace="space-science",
-    output_namespace="output/space_science",
-    telegram_chat_reference="TELEGRAM_CHAT_SPACE_SCIENCE_ID",
-    telegram_credential_reference="TELEGRAM_BOT_SPACE_SCIENCE_TOKEN",
-)
-# Registration only; Hidden History cron is not enabled by this config.
-HIDDEN_HISTORY = ChannelConfig(
-    channel_key="hidden_history",
-    channel_name="hiddenhistory",
-    youtube_channel_id="UCWsMUjiZ7q07Bb-MKhXojDw",
-    credential_reference="YOUTUBE_TOKEN_HIDDEN_HISTORY_B64",
-    topic_theme="forgotten history, unusual historical incidents, strange moments from history",
-    content_instructions=(
-        "Factual, concise, curiosity-driven historical storytelling. Focus on lesser-known "
-        "real historical events and unusual incidents. Avoid sensational claims that are "
-        "not historically supportable."
-    ),
-    timezone="Asia/Kolkata",
-    publication_slots=("10:00", "14:00", "19:00"),
-    preparation_times=MINUTE_MYSTERIES.preparation_times,
-    state_namespace=".actions-work-hidden-history",
-    artifact_namespace="hidden-history",
-    output_namespace="output/hidden_history",
-    telegram_chat_reference="TELEGRAM_CHAT_HIDDEN_HISTORY_ID",
-    telegram_credential_reference="TELEGRAM_BOT_HIDDEN_HISTORY_TOKEN",
-)
-CHANNEL_CONFIGS = (MINUTE_MYSTERIES, SPACE_SCIENCE, HIDDEN_HISTORY)
+CHANNEL_DATA_FILE = Path(__file__).with_name("channels.json")
+# Validation limits, not a new scheduler or per-channel production configuration.
+SUPPORTED_SCHEDULE = {"timezone": "Asia/Kolkata",
+    "publication_slots": ("10:00", "14:00", "19:00"),
+    "preparation_times": ("05:05", "09:05", "13:05", "17:05", "21:05")}
+LEGACY_NAMESPACES = {"state_namespace": ".actions-work",
+                     "artifact_namespace": "mystery", "output_namespace": "output/videos"}
 
 
-def resolve_channel_config(channel_key: str, *, configs: Sequence[ChannelConfig] | None = None) -> ChannelConfig:
-    """Validate the entire registry before lookup; never load secrets or run code.
+def _validate_supported_schedule(values):
+    if any(values.get(field) != expected for field, expected in SUPPORTED_SCHEDULE.items()):
+        raise ValueError("Unsupported production timezone or schedule")
 
-    Optional configs supports offline validation/future registries. Registration
-    does not configure automatic scheduling; callers select a channel explicitly.
-    """
-    registry = CHANNEL_CONFIGS if configs is None else configs
-    keys = set()
+
+class ChannelDefaults(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    timezone: str
+    publication_slots: tuple[str, ...]
+    preparation_times: tuple[str, ...]
+
+
+class ChannelDefinition(BaseModel):
+    """Editable inputs only; resolved ChannelConfig remains the runtime contract."""
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    channel_key: str
+    channel_name: str
+    youtube_channel_id: str
+    credential_reference: str
+    topic_theme: str
+    content_instructions: str
+    timezone: str | None = None
+    publication_slots: tuple[str, ...] | None = None
+    preparation_times: tuple[str, ...] | None = None
+    telegram_chat_reference: str | None = None
+    telegram_credential_reference: str | None = None
+    legacy_namespaces: dict[str, str] | None = None
+
+
+class ChannelRegistryData(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    schema_version: int = Field(alias="schema")
+    defaults: ChannelDefaults
+    channels: tuple[ChannelDefinition, ...]
+
+
+def _channel_index(registry):
+    index, youtube_ids, credential_references = {}, set(), set()
     namespaces = {field: set() for field in ("state_namespace", "artifact_namespace", "output_namespace")}
-    found = None
     for config in registry:
         if not isinstance(config, ChannelConfig):
             raise ValueError("Registry entries must be validated ChannelConfig records")
-        if config.channel_key in keys:
+        if config.channel_key in index:
             raise ValueError("Duplicate channel key")
-        keys.add(config.channel_key)
+        index[config.channel_key] = config
         for field, existing in namespaces.items():
             value = getattr(config, field).casefold()
             if any(value == old or value.startswith(old + "/") or old.startswith(value + "/") for old in existing):
                 raise ValueError("Duplicate or overlapping " + field)
             existing.add(value)
-        if config.channel_key == channel_key:
-            found = config
-    if found is None:
+        if config.youtube_channel_id in youtube_ids:
+            raise ValueError("Duplicate YouTube channel ID")
+        youtube_ids.add(config.youtube_channel_id)
+        if config.credential_reference in credential_references:
+            raise ValueError("Duplicate credential reference")
+        credential_references.add(config.credential_reference)
+    return index
+
+
+def parse_channel_configs(text):
+    # JSON duplicate object members must not silently replace earlier evidence.
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Duplicate JSON field")
+            result[key] = value
+        return result
+    json.loads(text, object_pairs_hook=unique_object)
+    document = ChannelRegistryData.model_validate_json(text)
+    if document.schema_version != 1 or not document.channels:
+        raise ValueError("Unsupported or empty channel registry")
+    _validate_supported_schedule(document.defaults.model_dump())
+    configs = []
+    for definition in document.channels:
+        values = definition.model_dump(exclude_none=True)
+        legacy = values.pop("legacy_namespaces", None)
+        key = values["channel_key"]
+        # Validate keys before deriving any namespace (never touch the filesystem).
+        ChannelConfig.valid_key(key)
+        slug = key.replace("_", "-")
+        values = {**document.defaults.model_dump(), **values}
+        _validate_supported_schedule(values)
+        values.update(state_namespace=".actions-work-" + slug,
+                      artifact_namespace=slug, output_namespace="output/" + key)
+        if key == "minute_mysteries":
+            if legacy != LEGACY_NAMESPACES:
+                raise ValueError("Minute Mysteries requires exact legacy namespace compatibility")
+            values.update(legacy)
+        elif legacy is not None:
+            raise ValueError("Legacy namespace overrides are restricted to the default channel")
+        values.setdefault("telegram_chat_reference", "TELEGRAM_CHAT_" + key.upper() + "_ID")
+        values.setdefault("telegram_credential_reference", "TELEGRAM_BOT_" + key.upper() + "_TOKEN")
+        configs.append(ChannelConfig.model_validate(values))
+    _channel_index(configs)
+    return tuple(configs)
+
+
+def load_channel_configs(path=CHANNEL_DATA_FILE):
+    return parse_channel_configs(Path(path).read_text(encoding="utf-8"))
+
+
+def resolve_channel_config(channel_key: str, *, configs: Sequence[ChannelConfig] | None = None) -> ChannelConfig:
+    """Validate the whole registry; registration never enables automatic scheduling."""
+    index = _channel_index(CHANNEL_CONFIGS if configs is None else configs)
+    if channel_key not in index:
         raise ValueError("Unknown channel key")
-    return found
+    return index[channel_key]
+
+
+CHANNEL_CONFIGS = load_channel_configs()
+# Public compatibility exports; new channels need no new Python constant.
+MINUTE_MYSTERIES = resolve_channel_config("minute_mysteries")
+SPACE_SCIENCE = resolve_channel_config("space_science")
+HIDDEN_HISTORY = resolve_channel_config("hidden_history")
 
 
 def validate_channel_identity(record, channel, *, allow_legacy=False):
