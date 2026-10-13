@@ -7,7 +7,7 @@ from filelock import FileLock
 from config.settings import UPLOAD_TIMES
 from config.channels import slot_owner
 from engine.scheduling.daily_queue import india_now
-from run_actions import Production, StaleStateConflict, require
+from run_actions import Production, ProductionError, StaleStateConflict, require
 from engine.scheduling.daily_queue import CheckpointError
 import copy
 import json
@@ -48,6 +48,27 @@ def verified_item(item, day, channel):
             and evidence.get("channel_id") == channel and evidence.get("privacy_status") == "private"
             and evidence.get("processing_status") == "succeeded"
             and actual == datetime.fromisoformat(publication_time(day, item["slot"])))
+
+
+def verification_outcome(evidence, item, day, channel):
+    """Inconclusive readback is pending; explicit identity contradictions are invalid."""
+    if not isinstance(evidence, dict):
+        return "pending"
+    expected = {"video_id": item["youtube"]["video_id"], "channel_id": channel,
+                "privacy_status": "private"}
+    if any(evidence.get(key) is not None and evidence[key] != value for key, value in expected.items()):
+        return "invalid"
+    if evidence.get("processing_status") in ("failed", "terminated"):
+        return "invalid"
+    if evidence.get("publish_at") is not None:
+        try:
+            stamp = datetime.fromisoformat(evidence["publish_at"].replace("Z", "+00:00"))
+            if stamp != datetime.fromisoformat(publication_time(day, item["slot"])):
+                return "invalid"
+        except (ValueError, TypeError, AttributeError):
+            return "invalid"
+    candidate = {**item, "preparation_verification": evidence}
+    return "verified" if verified_item(candidate, day, channel) else "pending"
 
 
 def validate_preparation(queue):
@@ -206,6 +227,7 @@ class Preparation(Production):
                 notifier = notify_generated_video
             problems = []
             authentication_error = None
+            authentication_invalid = False
             candidates = [v for v in self.queue.read(self.day)["videos"]
                           if not verified_item(v, self.day, expected_channel)
                           and v["generation_status"] == "ready" and self._future(v["slot"], clock)
@@ -215,6 +237,7 @@ class Preparation(Production):
                     authenticate()
                 except Exception as exc:
                     authentication_error = type(exc).__name__
+                    authentication_invalid = isinstance(exc, (ValueError, ProductionError))
             for item in self.queue.read(self.day)["videos"]:
                 slot = item["slot"]
                 if verified_item(item, self.day, expected_channel):
@@ -223,7 +246,10 @@ class Preparation(Production):
                 admission()
                 if not self._future(slot, clock):
                     self._log(item, clock, "block_elapsed_publish_at")
-                    problems.append({"slot": slot, "reason": "publish_at_not_future"})
+                    uploaded = item["upload_status"] == "uploaded" and (item.get("youtube") or {}).get("video_id")
+                    invalid = (item.get("preparation_verification") or {}).get("verification_status") == "invalid"
+                    problems.append({"slot": slot, "reason": "verification_elapsed_uploaded"
+                                     if uploaded and not invalid else "publish_at_not_future"})
                     continue
                 if item["generation_status"] != "ready":
                     self._log(item, clock, "generation_incomplete")
@@ -272,33 +298,38 @@ class Preparation(Production):
                                                    "successful_upload_at": clock().isoformat()})
                 if authentication_error:
                     self._log(item, clock, "verify_existing_id_authentication_blocked")
-                    problems.append({"slot": slot, "reason": "authentication_failed_verification_pending",
-                                     "error_type": authentication_error})
+                    status = "invalid" if authentication_invalid else "pending"
+                    self.queue._set(self.day, slot, {"preparation_verification": {
+                        "verified": False, "verification_status": status, "error_type": authentication_error}})
+                    problems.append({"slot": slot, "reason": "verification_invalid" if authentication_invalid
+                                     else "authentication_failed_verification_pending", "error_type": authentication_error})
                     continue
                 self._log(item, clock, "verify_existing_id")
                 try:
                     admission()
                     if not self._future(slot, clock):
-                        problems.append({"slot": slot, "reason": "publish_at_not_future"})
+                        problems.append({"slot": slot, "reason": "verification_elapsed_uploaded"})
                         continue
                     evidence = verifier(youtube["video_id"], expected_channel, publication_time(self.day, slot))
-                    if isinstance(evidence, dict) and evidence.get("processing_status") == "processing":
-                        evidence = {**evidence, "verification_status": "pending"}
+                    current = next(v for v in self.queue.read(self.day)["videos"] if v["slot"] == slot)
+                    status = verification_outcome(evidence, current, self.day, expected_channel)
+                    evidence = {**(evidence if isinstance(evidence, dict) else {}),
+                                "verified": status == "verified", "verification_status": status}
                     self.queue._set(self.day, slot, {"preparation_verification": evidence})
                 except Exception as exc:
                     if self.poisoned:
                         raise
+                    status = "invalid" if isinstance(exc, (ValueError, ProductionError)) else "pending"
                     self.queue._set(self.day, slot, {"preparation_verification": {"verified": False,
-                                                    "error_type": type(exc).__name__}})
-                    problems.append({"slot": slot, "reason": "verification_failed"})
+                        "verification_status": status, "error_type": type(exc).__name__}})
+                    problems.append({"slot": slot, "reason": "verification_invalid" if status == "invalid"
+                                     else "verification_pending", "error_type": type(exc).__name__})
                     continue
                 current = next(v for v in self.queue.read(self.day)["videos"] if v["slot"] == slot)
-                if not verified_item(current, self.day, expected_channel):
-                    evidence = current.get("preparation_verification") or {}
-                    scheduled = {**current, "preparation_verification": {**evidence,
-                                 "verified": True, "processing_status": "succeeded"}}
-                    pending = evidence.get("processing_status") == "processing" and verified_item(scheduled, self.day, expected_channel)
-                    problems.append({"slot": slot, "reason": "processing_pending" if pending else "processing_or_schedule_unverified"})
+                if status != "verified":
+                    problems.append({"slot": slot, "reason": "verification_invalid" if status == "invalid"
+                                     else "processing_pending" if evidence.get("processing_status") == "processing"
+                                     else "verification_pending"})
                     continue
                 try:
                     if not Path(current["video_path"]).is_file():
@@ -393,6 +424,13 @@ class Preparation(Production):
 
     def _result(self, clock, channel, *, no_op=False, problems=None):
         data = self.queue.read(self.day)
+        complete_uploads = all(v["upload_status"] == "uploaded" and
+            (v.get("youtube") or {}).get("success") is True and (v.get("youtube") or {}).get("video_id")
+            for v in data["videos"])
+        invalid = any((v.get("preparation_verification") or {}).get("verification_status") == "invalid"
+                      for v in data["videos"]) or any(p["reason"] == "verification_invalid" for p in (problems or []))
+        pending_reasons = {"processing_pending", "verification_pending", "authentication_failed_verification_pending",
+                           "verification_elapsed_uploaded"}
         return {"status": data.get("batch_status", "PREPARING"), "target_date": str(self.day),
                 "execution_date": str(clock().astimezone(TZ).date()), "batch": self.queue.path(self.day).name,
                 "no_op": no_op, "recoverable": data.get("batch_status") != "READY",
@@ -400,9 +438,14 @@ class Preparation(Production):
                 "upload_status": "COMPLETE" if all(v["upload_status"] == "uploaded" and
                     (v.get("youtube") or {}).get("success") is True and (v.get("youtube") or {}).get("video_id")
                     for v in data["videos"]) else "INCOMPLETE",
-                "verification_pending": bool(problems) and all(p["reason"] == "processing_pending" for p in problems),
+                "verification_pending": complete_uploads and not invalid and
+                    all(v["generation_status"] == "ready" for v in data["videos"]) and bool(problems) and
+                    all(p["reason"] in pending_reasons for p in problems),
+                "verification_invalid": invalid,
                 "problems": problems or [],
                 "slots": [{"slot": v["slot"], "generation_status": v["generation_status"],
                            "upload_status": v["upload_status"], "youtube_video_id": (v.get("youtube") or {}).get("video_id"),
                            "publish_at": publication_time(self.day, v["slot"]),
-                           "verified": verified_item(v, self.day, channel)} for v in data["videos"]]}
+                           "verified": verified_item(v, self.day, channel),
+                           "verification_status": "verified" if verified_item(v, self.day, channel)
+                               else (v.get("preparation_verification") or {}).get("verification_status", "pending")} for v in data["videos"]]}

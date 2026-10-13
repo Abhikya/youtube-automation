@@ -173,6 +173,10 @@ class UploadNotStarted(RuntimeError):
     """Proven failure before constructing or sending an insert request."""
 
 
+class VerificationPending(RuntimeError):
+    """Readback is inconclusive; a durable upload ID must never be retried."""
+
+
 class PublicationExpired(UploadNotStarted):
     """The intended slot elapsed before any insertion request was made."""
 
@@ -304,12 +308,18 @@ def verify_prepared_video(video_id, expected_channel, publish_at, *, credential_
     try:
         def read():
             values = service.videos().list(id=video_id, part="snippet,status,processingDetails").execute().get("items", [])
+            if not values:
+                raise VerificationPending("Prepared video readback unavailable; retain durable ID")
             if len(values) != 1 or values[0].get("id") != video_id:
-                raise ValueError("Prepared video missing or inaccessible; never reupload blindly")
+                raise ValueError("Prepared video identity mismatch; never reupload blindly")
             video = values[0]
+            if not video.get("snippet", {}).get("channelId"):
+                raise VerificationPending("Prepared video ownership readback unavailable; retain durable ID")
             if video.get("snippet", {}).get("channelId") != expected_channel:
                 raise ValueError("Prepared video belongs to another channel")
             status = video.get("status", {})
+            if not status.get("privacyStatus"):
+                raise VerificationPending("Prepared video privacy readback unavailable; retain durable ID")
             if status.get("privacyStatus") != "private" or status.get("uploadStatus") in {"failed", "rejected", "deleted"}:
                 raise ValueError("Prepared video is public, unavailable or rejected; repair refused")
             return video

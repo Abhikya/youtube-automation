@@ -859,6 +859,61 @@ class PreparationTests(unittest.TestCase):
             self.assertIs(preflight.call_args.kwargs["credential_context"], auth.call_args.args[0])
 
 
+    def test_transient_verification_and_repeated_cron_never_repeat_upload_for_both_channels(self):
+        from config.channels import resolve_channel_config,rendered_media_filename
+        for key in ('minute_mysteries','space_science'):
+            channel=resolve_channel_config(key);store=Store()
+            controller=Preparation(store,DAY,self.root/key,channel=channel)
+            count=[0]
+            def generate():
+                count[0]+=1
+                path=controller.output/rendered_media_filename(channel,f'20261002090{count[0]}00')
+                path.write_bytes(b'render'+bytes([count[0]]))
+                return {'video_path':str(path),'metadata':{'Title':'Title','Description':'Description','Hashtags':['#shorts']}}
+            uploader=Mock(side_effect=lambda path,meta,stamp:{'success':True,'status':'uploaded','video_id':'id-'+stamp,'privacy_status':'private'})
+            verifier=Mock(side_effect=TimeoutError('secret API response must not be exposed'))
+            args=dict(expected_channel=channel.youtube_channel_id,generator=generate,uploader=uploader,
+                      verifier=verifier,notifier=Mock(return_value={'success':True}),now=lambda:NOW,
+                      credential_context=youtube.YouTubeCredentialContext(channel))
+            for _ in range(2):
+                result=controller.prepare(**args)
+                self.assertTrue(result['verification_pending']);self.assertFalse(result['verification_invalid'])
+                self.assertNotIn('secret',json.dumps(result))
+                self.assertTrue(all(v['upload_status']=='uploaded' and v['youtube']['video_id'] for v in controller.queue.read(DAY)['videos']))
+            self.assertEqual(uploader.call_count,3);self.assertEqual(count[0],3)
+            verifier.side_effect=lambda vid,ch,stamp:{'verified':True,'video_id':vid,'channel_id':ch,
+                'privacy_status':'private','publish_at':stamp,'processing_status':'succeeded'}
+            self.assertEqual(controller.prepare(**args)['status'],'READY')
+            self.assertTrue(controller.prepare(**args)['no_op'])
+            self.assertEqual(uploader.call_count,3);self.assertEqual(count[0],3)
+
+    def test_target_ready_recovery_pending_and_elapsed_ids_are_warnings(self):
+        self.verify.side_effect=TimeoutError('temporary readback')
+        self.assertTrue(self.run_prepare()['verification_pending'])
+        self.fresh();self.upload.reset_mock();self.verify.reset_mock()
+        instant=datetime(2026,10,3,10,5,tzinfo=TZ)
+        code,result,_=self.default_recovery_run(instant)
+        self.assertEqual(code,0);self.assertEqual(result['status'],'READY')
+        self.assertIn('recovery_warning',result)
+        self.assertTrue(result['current_day_recovery']['verification_pending'])
+        self.assertEqual(self.verify.call_count,2)
+        self.upload.assert_not_called()
+        self.assertEqual(self.controller.recoverable_slots(expected_channel=CHANNEL,now=instant),['14:00','19:00'])
+        self.fresh();self.verify.reset_mock()
+        code,result,_=self.default_recovery_run(datetime(2026,10,3,19,5,tzinfo=TZ))
+        self.assertEqual(code,0);self.verify.assert_not_called();self.upload.assert_not_called()
+
+    def test_wrong_channel_verification_blocks_even_with_ready_target_and_keeps_ids(self):
+        self.verify.side_effect=TimeoutError('temporary')
+        self.run_prepare();self.fresh();self.upload.reset_mock()
+        self.verify.side_effect=lambda vid,ch,stamp,**kwargs:{'verified':False,'video_id':vid,'channel_id':'wrong',
+            'privacy_status':'private','publish_at':stamp,'processing_status':'succeeded'}
+        code,result,_=self.default_recovery_run(datetime(2026,10,3,9,5,tzinfo=TZ))
+        self.assertEqual(code,1);self.assertTrue(result['current_day_recovery']['verification_invalid'])
+        self.upload.assert_not_called()
+        self.assertTrue(all(v['upload_status']=='uploaded' and v['youtube']['video_id'] for v in self.controller.queue.read(DAY)['videos']))
+
+
 class PolicyTests(unittest.TestCase):
     def test_tomorrow_uses_india_date_and_rejects_other_days(self):
         now=datetime(2026,10,2,20,tzinfo=timezone.utc)
@@ -986,6 +1041,8 @@ class YouTubePreparationTests(unittest.TestCase):
             self.readbacks(v)
             with self.assertRaises(ValueError):youtube.verify_prepared_video('id',CHANNEL,self.stamp)
         self.service.videos.return_value.list.return_value.execute.side_effect=[{'items':[]}]
+        with self.assertRaises(youtube.VerificationPending):youtube.verify_prepared_video('id',CHANNEL,self.stamp)
+        self.readbacks({**self.video(),'id':'wrong-id'})
         with self.assertRaises(ValueError):youtube.verify_prepared_video('id',CHANNEL,self.stamp)
         v=self.video();v['processingDetails']['processingStatus']='failed';self.readbacks(v)
         self.assertFalse(youtube.verify_prepared_video('id',CHANNEL,self.stamp)['verified'])

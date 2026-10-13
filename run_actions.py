@@ -632,9 +632,16 @@ def main():
         else:
             result = cleanup_production(store, channel=channel)
         recovery = result.get('current_day_recovery', {})
+        recovery_warning = (result['status'] == 'READY' and recovery.get('status') == 'PREPARING'
+                            and recovery.get('upload_status') == 'COMPLETE'
+                            and recovery.get('generation_status') == 'COMPLETE'
+                            and not recovery.get('verification_invalid'))
+        if recovery_warning:
+            result['recovery_warning'] = 'Existing recovery uploads retained; verification requires follow-up, never reupload'
         incomplete = args.operation == 'prepare' and (
+            result.get('verification_invalid') or recovery.get('verification_invalid') or
             (result['status'] != 'READY' and not result.get('verification_pending')) or
-            (recovery.get('status') == 'PREPARING' and not recovery.get('verification_pending')))
+            (recovery.get('status') == 'PREPARING' and not recovery.get('verification_pending') and not recovery_warning))
         pending = result.get('verification_pending') or recovery.get('verification_pending')
         outcome = 'RECOVERABLE' if incomplete else ('VERIFICATION_PENDING' if pending else 'SUCCESS')
         message = json.dumps(result, ensure_ascii=False)
