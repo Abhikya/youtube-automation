@@ -150,3 +150,100 @@ class OnboardingTests(unittest.TestCase):
                 self.assertEqual(main(['--config',str(path),'list']),0)
             self.assertEqual(path.read_bytes(),before)
             self.assertEqual(len(load_channel_configs(path)),4)
+
+
+class GuidedOnboardingTests(unittest.TestCase):
+    def setUp(self):
+        from unittest.mock import patch
+        from tools import channel_onboarding as cli
+        from engine.uploader import youtube_uploader as yt
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name)
+        self.cli=cli;self.yt=yt
+        self.token=self.root/'token.pickle'
+        for name in ('production.yml','test-video-generation.yml'):
+            target=self.root/'.github/workflows'/name;target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_text((cli.PROJECT_ROOT/'.github/workflows'/name).read_text())
+        target=self.root/'engine/pipeline/video_pipeline.py';target.parent.mkdir(parents=True)
+        target.write_text((cli.PROJECT_ROOT/'engine/pipeline/video_pipeline.py').read_text())
+        self.addCleanup(patch.stopall)
+        patch.object(cli,'PROJECT_ROOT',self.root).start()
+        patch.object(yt,'YOUTUBE_TOKEN_FILE',str(self.token)).start()
+
+    def invoke(self,command,key='minute_mysteries',extra=()):
+        output=io.StringIO()
+        with redirect_stdout(output):code=self.cli.main([command,'--channel-key',key,*extra])
+        return code,json.loads(output.getvalue())
+
+    def test_status_existing_and_missing_token_without_state_mutation(self):
+        self.token.write_bytes(b'NEVER_PRINT_SECRET_TOKEN')
+        before={str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        code,status=self.invoke('status')
+        self.assertEqual(code,0);self.assertTrue(status['config_exists']);self.assertTrue(status['local_token_exists'])
+        self.assertEqual(status['expected_github_secret'],'YOUTUBE_TOKEN_PICKLE_B64')
+        self.assertEqual(status['github_secret_status'],'NOT_VERIFIED')
+        code,status=self.invoke('status','space_science')
+        self.assertFalse(status['local_token_exists']);self.assertEqual(status['readiness'],'NOT_READY')
+        self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+
+    def test_authorize_delegates_and_propagates_failure(self):
+        from unittest.mock import patch
+        for result in (0,1):
+            with patch.object(self.yt,'main',return_value=result) as authorize,redirect_stdout(io.StringIO()):
+                self.assertEqual(self.cli.main(['authorize','--channel-key','space_science']),result)
+            authorize.assert_called_once_with(['--authorize','--channel-key','space_science'])
+
+    def test_real_authorization_cli_wrong_channel_remains_blocked_offline(self):
+        from unittest.mock import Mock,patch
+        service=Mock();service.channels.return_value.list.return_value.execute.return_value={'items':[{'id':'wrong'}]}
+        with patch.object(self.yt,'get_authenticated_service',return_value=service),redirect_stdout(io.StringIO()):
+            self.assertEqual(self.cli.main(['authorize','--channel-key','space_science']),1)
+        service.videos.assert_not_called();service.close.assert_called_once()
+
+    def test_secret_info_never_reads_or_prints_token(self):
+        from unittest.mock import patch
+        self.token.write_bytes(b'NEVER_PRINT_SECRET_TOKEN')
+        with patch.object(Path,'read_bytes',side_effect=AssertionError('Token bytes must not be read')):
+            code,info=self.invoke('secret-info')
+        self.assertNotIn('NEVER_PRINT_SECRET_TOKEN',json.dumps(info))
+        self.assertIn('Set-Clipboard',info['powershell_command'])
+        self.assertEqual(info['github_secret_name'],'YOUTUBE_TOKEN_PICKLE_B64')
+
+    def test_cron_and_private_test_info_are_templates_only(self):
+        before={str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        code,template=self.invoke('cron-template','hidden_history',('--repository','Owner/Repo'))
+        self.assertEqual(template['method'],'POST')
+        self.assertEqual(template['body'],{'ref':'main','inputs':{'channel_key':'hidden_history','operation':'prepare'}})
+        self.assertEqual(template['url'],'https://api.github.com/repos/Owner/Repo/actions/workflows/production.yml/dispatches')
+        self.assertEqual(template['preparation_opportunities'],['05:05','09:05','13:05','17:05','21:05'])
+        code,info=self.invoke('private-test-info','space_science')
+        self.assertEqual(info['inputs'],{'channel_key':'space_science','upload_private':True})
+        self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
+
+    def test_readiness_missing_token_and_prepared_synthetic_channel(self):
+        from unittest.mock import patch
+        code,result=self.invoke('readiness')
+        self.assertEqual(code,1);self.assertEqual(result['readiness'],'NOT_READY')
+        data=json.loads(CHANNEL_DATA_FILE.read_text())
+        data['channels'].append({'channel_key':'ocean_science','channel_name':'Ocean Science','youtube_channel_id':'UC'+'4'*22,
+            'credential_reference':'YOUTUBE_TOKEN_OCEAN_SCIENCE_B64','topic_theme':'ocean science','content_instructions':'Factual ocean storytelling.'})
+        file=self.root/'channels.json';file.write_text(json.dumps(data))
+        configs=load_channel_configs(file)
+        with patch('config.channels.CHANNEL_CONFIGS',configs),redirect_stdout(io.StringIO()) as absent:
+            self.assertEqual(self.cli.main(['--config',str(file),'status','--channel-key','ocean_science']),0)
+        self.assertFalse(json.loads(absent.getvalue())['local_token_exists'])
+        token=self.root/'.credentials/ocean_science/token.pickle';token.parent.mkdir(parents=True);token.write_bytes(b'fixture only')
+        with patch('config.channels.CHANNEL_CONFIGS',configs),redirect_stdout(io.StringIO()) as output:
+            code=self.cli.main(['--config',str(file),'readiness','--channel-key','ocean_science'])
+        result=json.loads(output.getvalue())
+        self.assertEqual(code,0);self.assertEqual(result['readiness'],'READY_FOR_PRIVATE_TEST')
+        self.assertEqual(result['github_secret_status'],'NOT_VERIFIED')
+        self.assertTrue(result['global_content_policy_applies']);self.assertTrue(result['paths_namespaces_valid'])
+        self.assertEqual(result['missing_steps'],[])
+
+    def test_unknown_channel_not_ready_and_unrelated_receipt_not_accepted(self):
+        code,result=self.invoke('status','unknown')
+        self.assertEqual(result['readiness'],'NOT_READY');self.assertFalse(result['config_exists'])
+        receipt=self.root/'single-video-test.json';receipt.write_text(json.dumps({'channel_key':'space_science','expected_channel_id':'wrong','upload_verified':True,'youtube_video_id':'id','upload_status':'uploaded'}))
+        code,result=self.invoke('status','space_science')
+        self.assertEqual(result['private_validation_status'],'NOT_VERIFIED')
