@@ -1,5 +1,5 @@
-name: Mystery Shorts production
-run-name: Mystery preparation - ${{ inputs.day || 'tomorrow' }}
+name: YouTube Production
+run-name: YouTube Production - ${{ inputs.channel_key || 'minute_mysteries' }} - ${{ inputs.operation || 'prepare' }}
 
 on:
   workflow_dispatch:
