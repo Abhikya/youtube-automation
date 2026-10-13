@@ -1,3 +1,4 @@
+from config.content_policy import GLOBAL_GUARDRAIL_INSTRUCTIONS, ContentGuardrailError, validate_content
 import json
 import os
 from openai import OpenAI
@@ -50,6 +51,8 @@ Rules:
             "Focus on documented unsolved mysteries", "Focus on documented facts within the configured topic")
         prompt += f"\nChannel: {channel_config.channel_name}\nContent instructions: {channel_config.content_instructions}"
 
+    prompt += "\n" + GLOBAL_GUARDRAIL_INSTRUCTIONS
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
@@ -60,7 +63,16 @@ Rules:
     ideas = [line.strip("- ").strip() for line in ideas_text.split("\n") if line.strip()]
 
     # Remove duplicates
-    new_ideas = [idea for idea in ideas if idea not in previous_ideas]
+    new_ideas = []
+    for idea in ideas:
+        try:
+            validate_content(idea)
+        except ContentGuardrailError:
+            continue
+        if idea not in previous_ideas and idea not in new_ideas:
+            new_ideas.append(idea)
+    if ideas and not new_ideas:
+        raise ContentGuardrailError("No eligible new ideas; normal generation retry required")
 
     # Save updated memory
     memory.setdefault(topic, []).extend(new_ideas)

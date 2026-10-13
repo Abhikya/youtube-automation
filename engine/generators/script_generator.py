@@ -1,3 +1,4 @@
+from config.content_policy import GLOBAL_GUARDRAIL_INSTRUCTIONS, validate_content
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -8,11 +9,15 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def generate_script(idea, *, hook_strategy="BASELINE", baseline_script=None, channel_config=None):
+    validate_content(idea)
     if hook_strategy not in {"BASELINE", "HOOK_EVENT_FIRST_V1"}:
         raise ValueError("Unknown hook strategy")
     if hook_strategy == "HOOK_EVENT_FIRST_V1":
         source = baseline_script if baseline_script is not None else generate_script(idea, channel_config=channel_config)
-        return rewrite_opening(idea, source)
+        validate_content(source)
+        result = rewrite_opening(idea, source)
+        validate_content(result)
+        return result
     if baseline_script is not None:
         raise ValueError("baseline_script is only supported for experimental comparison")
 
@@ -36,6 +41,8 @@ Rules:
         prompt = prompt.replace("Mystery Shorts", "YouTube Shorts").replace("this unsolved mystery", "this topic")
         prompt += f"\nChannel: {channel_config.channel_name}\nTopic: {channel_config.topic_theme}\nContent instructions: {channel_config.content_instructions}"
 
+    prompt += "\n" + GLOBAL_GUARDRAIL_INSTRUCTIONS
+
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=[
@@ -45,6 +52,7 @@ Rules:
 
     script = response.choices[0].message.content
 
+    validate_content(script)
     return script
 
 def split_opening(script):

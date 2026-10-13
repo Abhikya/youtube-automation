@@ -1,3 +1,4 @@
+from config.content_policy import GLOBAL_GUARDRAIL_INSTRUCTIONS, validate_content
 import os
 import re
 from openai import OpenAI
@@ -9,6 +10,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def generate_metadata(script, *, channel_config=None):
+    validate_content(script)
     prompt = f"""
 Generate curiosity-driven Mystery Shorts metadata for this script.
 Keep the title and description faithful to the script.
@@ -32,12 +34,16 @@ Script:
         prompt = prompt.replace("Mystery Shorts", "YouTube Shorts")
         prompt += f"\nChannel: {channel_config.channel_name}\nTopic: {channel_config.topic_theme}\nContent instructions: {channel_config.content_instructions}"
 
+    prompt += "\n" + GLOBAL_GUARDRAIL_INSTRUCTIONS
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
     )
 
     text = response.choices[0].message.content.strip()
+
+    validate_content(text)
 
     title = ""
     description = ""

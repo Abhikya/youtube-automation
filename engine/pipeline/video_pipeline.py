@@ -1,3 +1,4 @@
+from config.content_policy import validate_content
 from config.channels import RuntimePaths, MINUTE_MYSTERIES, rendered_media_filename
 from config.settings import BASE_DIR
 
@@ -42,7 +43,12 @@ def generate_video(topic=None, idea=None, *, publish=True, runtime_paths=None):
             raise ValueError("No mystery ideas were returned; no media was generated.")
         idea = ideas[0]
 
+    validate_content(idea)
     script = generate_script(idea, **content_args)
+    validate_content(script)
+    metadata = generate_metadata(script, **content_args)
+    validate_content(metadata.get("Title", ""), metadata.get("Description", ""),
+                     " ".join(metadata.get("Hashtags", [])))
 
     audio_path = str(paths.audio / "voice.mp3")
 
@@ -76,8 +82,6 @@ def generate_video(topic=None, idea=None, *, publish=True, runtime_paths=None):
         music_path=music_path,
         temp_audiofile=str(paths.audio / (filename + ".render.m4a")),
     )
-
-    metadata = generate_metadata(script, **content_args)
 
     result = {
         "topic": topic,
