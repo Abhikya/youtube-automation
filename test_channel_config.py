@@ -8,6 +8,9 @@ class ChannelConfigTests(unittest.TestCase):
     def config(self, key="other", **changes):
         data=MINUTE_MYSTERIES.model_dump()
         data.update(channel_key=key, state_namespace=f"state/{key}", artifact_namespace=key, output_namespace=f"renders/{key}")
+        import hashlib
+        data["youtube_channel_id"] = "UC" + hashlib.sha256(key.encode()).hexdigest()[:22]
+        data["credential_reference"] = "TEST_TOKEN_" + key.upper()
         data.update(changes)
         return ChannelConfig.model_validate(data)
 

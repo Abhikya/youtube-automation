@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "defaults": {
+    "timezone": "Asia/Kolkata",
+    "publication_slots": [
+      "10:00",
+      "14:00",
+      "19:00"
+    ],
+    "preparation_times": [
+      "05:05",
+      "09:05",
+      "13:05",
+      "17:05",
+      "21:05"
+    ]
+  },
+  "channels": [
+    {
+      "channel_key": "minute_mysteries",
+      "channel_name": "Minute Mysteries",
+      "youtube_channel_id": "UCR2L8UE-pc1Hd7U3AurrECQ",
+      "credential_reference": "YOUTUBE_TOKEN_PICKLE_B64",
+      "topic_theme": "unsolved mysteries",
+      "content_instructions": "Documented unsolved mysteries; curiosity-driven Shorts. Strong hook in first 3 seconds; around 80 words and 40 seconds; simple storytelling. Distinguish known facts from theories and unresolved questions; label speculation and folklore explicitly. Never invent evidence, quotes or a definitive solution. Keep titles and descriptions faithful to the script.",
+      "legacy_namespaces": {
+        "state_namespace": ".actions-work",
+        "artifact_namespace": "mystery",
+        "output_namespace": "output/videos"
+      },
+      "telegram_chat_reference": "TELEGRAM_CHAT_ID",
+      "telegram_credential_reference": "TELEGRAM_BOT_TOKEN"
+    },
+    {
+      "channel_key": "space_science",
+      "channel_name": "Space and Strange Science",
+      "youtube_channel_id": "UCfs8yJirS4w54IEiwSlM9xA",
+      "credential_reference": "YOUTUBE_TOKEN_SPACE_SCIENCE_B64",
+      "topic_theme": "astronomy, space mysteries, strange science",
+      "content_instructions": "Factual, curiosity-driven, science-focused storytelling."
+    },
+    {
+      "channel_key": "hidden_history",
+      "channel_name": "hiddenhistory",
+      "youtube_channel_id": "UCWsMUjiZ7q07Bb-MKhXojDw",
+      "credential_reference": "YOUTUBE_TOKEN_HIDDEN_HISTORY_B64",
+      "topic_theme": "forgotten history, unusual historical incidents, strange moments from history",
+      "content_instructions": "Factual, concise, curiosity-driven historical storytelling. Focus on lesser-known real historical events and unusual incidents. Avoid sensational claims that are not historically supportable."
+    }
+  ]
+}
