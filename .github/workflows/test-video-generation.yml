@@ -1,4 +1,5 @@
-name: Test single mystery video generation
+name: YouTube Single-Video Test
+run-name: YouTube Single-Video Test - ${{ inputs.channel_key || 'minute_mysteries' }} - ${{ inputs.upload_private && 'private upload' || 'render only' }}
 
 on:
   workflow_dispatch:
