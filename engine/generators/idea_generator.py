@@ -1,4 +1,5 @@
 from config.content_policy import GLOBAL_GUARDRAIL_INSTRUCTIONS, ContentGuardrailError, validate_content
+from engine.generators.story_identity import canonical_story_key, history_keys
 import json
 import os
 from openai import OpenAI
@@ -62,15 +63,19 @@ Rules:
 
     ideas = [line.strip("- ").strip() for line in ideas_text.split("\n") if line.strip()]
 
-    # Remove duplicates
+    # Lazily derive identities across this channel memory, including old topic keys.
+    # Memory remains proposals, not proof of publication. No cross-channel reads.
+    seen = history_keys(memory)
     new_ideas = []
     for idea in ideas:
         try:
             validate_content(idea)
         except ContentGuardrailError:
             continue
-        if idea not in previous_ideas and idea not in new_ideas:
+        key = canonical_story_key(idea)
+        if key is not None and key not in seen:
             new_ideas.append(idea)
+            seen.add(key)
     if ideas and not new_ideas:
         raise ContentGuardrailError("No eligible new ideas; normal generation retry required")
 
