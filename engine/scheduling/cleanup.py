@@ -75,7 +75,7 @@ def _validated_target(item, day, approved_dir, references, *, channel=MINUTE_MYS
     if not isinstance(files, list) or len(files) != 1:
         raise ValueError("Exactly one recorded final-render ownership entry is required")
     record = files[0]
-    if (record.get("kind") != "rendered_video" or item.get("slot") not in UPLOAD_TIMES
+    if (record.get("kind") != "rendered_video" or item.get("slot") not in channel.publication_slots
             or not valid_slot_owner(record.get("owner"), channel, day, item["slot"])):
         raise ValueError("Generated-file owner does not match queue date/slot")
     if any(value.get("channel_key", channel.channel_key) != channel.channel_key for value in (item, record)):

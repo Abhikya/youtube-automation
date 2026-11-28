@@ -32,7 +32,7 @@ WORKFLOW = '.github/workflows/production.yml'
 STATE_PREFIX = 'mystery-state-'
 MEDIA_DAYS = 7
 STATE_DAYS = 90
-SLOT_NAMES = {'10:00': 'slot-10', '14:00': 'slot-14', '19:00': 'slot-19'}
+SLOT_NAMES = {'10:00': 'slot-10', '14:00': 'slot-14', '19:00': 'slot-19', '21:00': 'longform-21'}
 
 
 class ProductionError(RuntimeError):
@@ -73,13 +73,16 @@ def validate_state(state, day, generation_run=None, *, channel=MINUTE_MYSTERIES)
     require(queue.get('date') == day.isoformat() and queue.get('timezone') == 'Asia/Kolkata',
             'Queue date/timezone mismatch')
     items = queue.get('videos', [])
-    require([v.get('slot') for v in items] == list(UPLOAD_TIMES), 'Missing or incorrect daily slots')
+    require([v.get('slot') for v in items] == list(channel.publication_slots), 'Missing or incorrect daily slots')
+    require(queue.get("content_format", "shortform") == channel.content_format, "State content format mismatch")
     paths = []
     for item in items:
         require(item.get('upload_status') in ('pending', 'uploading', 'uploaded', 'failed', 'uncertain'),
                 'Invalid upload state')
         if item.get('generation_status') == 'ready':
             validate_metadata(item.get('metadata'))
+            if channel.content_format == "longform":
+                require("#shorts" not in json.dumps(item["metadata"]).lower(), "Long-form metadata contains #shorts")
             records = item.get('generated_files', [])
             require(len(records) == 1, 'Missing media fingerprint')
             record = records[0]
@@ -424,8 +427,8 @@ class Production:
         if not complete:
             return result
         require(not bad, 'Incomplete three-video batch: ' + ', '.join(bad))
-        require(len(result['videos']) == 3 and len(self.media) == 3, 'Three usable media artifacts required')
-        return {'status': 'ready', 'generation_run_id': self.state['generation_run_id'], 'slots': list(SLOT_NAMES.values())}
+        require(len(result['videos']) == len(self.channel.publication_slots) and len(self.media) == len(self.channel.publication_slots), 'Three usable media artifacts required')
+        return {'status': 'ready', 'generation_run_id': self.state['generation_run_id'], 'slots': [SLOT_NAMES[slot] for slot in self.channel.publication_slots]}
 
     def upload(self, slot, generation_run=None, uploader=None, notifier=None, *, catch_up=False):
         require(self.channel == MINUTE_MYSTERIES, 'Legacy upload is restricted to Minute Mysteries')
@@ -562,11 +565,11 @@ def restore_oauth(credential_context=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['prepare', 'cleanup'])
+    parser.add_argument('operation', choices=['prepare', 'cleanup', 'prepare_longform', 'cleanup_longform'])
     parser.add_argument('--channel-key', default='minute_mysteries', help='Registered production channel key')
     parser.add_argument('--day', default='', help='Target publication date; tomorrow or explicit existing current-day recovery in Asia/Kolkata')
     parser.add_argument("--confirmed-not-uploaded-slot", "--confirm-not-uploaded-slot",
-                        dest="confirmed_not_uploaded_slot", default="", choices=["", *UPLOAD_TIMES],
+                        dest="confirmed_not_uploaded_slot", default="", choices=["", *UPLOAD_TIMES, "21:00"],
                         help="Explicit Studio confirmation of absence; requires prepare --day")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s: %(message)s')
@@ -577,15 +580,18 @@ def main():
         require(os.getenv('GITHUB_ACTIONS') == 'true', 'Use the manual production Actions workflow')
         require(os.environ.get('GITHUB_REF') == 'refs/heads/' + os.environ.get('PRODUCTION_BRANCH', ''),
                 'Production operations must run on the default branch')
-        require(not args.confirmed_not_uploaded_slot or (args.operation == "prepare" and args.day),
+        require(not args.confirmed_not_uploaded_slot or (args.operation in ("prepare", "prepare_longform") and args.day),
                 "Confirmed-not-uploaded reconciliation requires prepare with an explicit --day")
         try:
             channel = resolve_channel_config(args.channel_key or 'minute_mysteries')
         except ValueError:
             raise ProductionError('Unknown or invalid production channel key') from None
+        if args.operation.endswith("_longform"):
+            from config.formats import longform_channel
+            channel = longform_channel(channel)
         started_at = india_now()
         store = GitHubArtifacts(channel=channel)
-        if args.operation == 'prepare':
+        if args.operation in ('prepare', 'prepare_longform'):
             from engine.scheduling.preparation import Preparation, target_day
             day = target_day(started_at, args.day)
             require(YOUTUBE_PRIVACY_STATUS == 'private', 'Production preparation requires private privacy')
@@ -638,7 +644,7 @@ def main():
                             and not recovery.get('verification_invalid'))
         if recovery_warning:
             result['recovery_warning'] = 'Existing recovery uploads retained; verification requires follow-up, never reupload'
-        incomplete = args.operation == 'prepare' and (
+        incomplete = args.operation in ('prepare', 'prepare_longform') and (
             result.get('verification_invalid') or recovery.get('verification_invalid') or
             (result['status'] != 'READY' and not result.get('verification_pending')) or
             (recovery.get('status') == 'PREPARING' and not recovery.get('verification_pending') and not recovery_warning))

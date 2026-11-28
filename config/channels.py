@@ -10,6 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class ChannelConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
+    @property
+    def content_format(self):
+        return "shortform"
+
     channel_key: str
     channel_name: str
     youtube_channel_id: str
@@ -221,11 +225,15 @@ def validate_channel_identity(record, channel, *, allow_legacy=False):
 
 
 def channel_identity(channel):
-    return {field: getattr(channel, field) for field in ("channel_key", "youtube_channel_id", "state_namespace")}
+    identity = {field: getattr(channel, field) for field in ("channel_key", "youtube_channel_id", "state_namespace")}
+    if channel.content_format == "longform":
+        identity["content_format"] = "longform"
+    return identity
 
 
 def slot_owner(channel, day, slot):
-    return f"{channel.channel_key}:{day.isoformat()}:{slot}"
+    format_part = "longform:" if channel.content_format == "longform" else ""
+    return f"{channel.channel_key}:{day.isoformat()}:{format_part}{slot}"
 
 
 def valid_slot_owner(owner, channel, day, slot):
@@ -234,6 +242,11 @@ def valid_slot_owner(owner, channel, day, slot):
 
 def validate_channel_scope(channel):
     """Reserve legacy namespaces even for programmatically supplied configs."""
+    if channel.content_format == "longform":
+        from config.formats import longform_channel
+        if channel != longform_channel(resolve_channel_config(channel.channel_key)):
+            raise ValueError("Long-form configuration mismatch")
+        return
     if channel == MINUTE_MYSTERIES:
         return
     if channel.channel_key == MINUTE_MYSTERIES.channel_key:
@@ -268,7 +281,8 @@ class RuntimePaths:
 
     @property
     def temp(self):
-        return self.root / "temp" / self.channel.channel_key
+        base = self.root / "temp" / self.channel.channel_key
+        return base / "longform" if self.channel.content_format == "longform" else base
 
     @property
     def audio(self):
@@ -288,6 +302,8 @@ class RuntimePaths:
 
     @property
     def memory(self):
+        if self.channel.content_format == "longform":
+            return self.root / "data" / "channels" / self.channel.channel_key / "longform" / "idea_memory.json"
         if self.channel == MINUTE_MYSTERIES:
             return self.root / "data" / "idea_memory.json"
         return self.root / "data" / "channels" / self.channel.channel_key / "idea_memory.json"
@@ -309,6 +325,8 @@ def rendered_media_filename(channel, timestamp):
     except ValueError:
         raise ValueError("Invalid media filename timestamp") from None
     prefix = channel.topic_theme.replace(" ", "_").lower()
+    if channel.content_format == "longform":
+        prefix = "longform_" + prefix
     if "/" in prefix or "\\" in prefix:
         raise ValueError("Invalid media filename topic")
     return f"{prefix}_{timestamp}.mp4"

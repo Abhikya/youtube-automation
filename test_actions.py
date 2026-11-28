@@ -82,6 +82,7 @@ class ProductionTests(unittest.TestCase):
     def generated(self):
         result = self.controller.generate(self.generator)
         self.assertEqual(result['status'], 'ready')
+        self.assertEqual(result['slots'], ['slot-10', 'slot-14', 'slot-19'])
         return result
 
     def fresh(self):

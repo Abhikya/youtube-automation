@@ -34,6 +34,18 @@ Script:
         prompt = prompt.replace("Mystery Shorts", "YouTube Shorts")
         prompt += f"\nChannel: {channel_config.channel_name}\nTopic: {channel_config.topic_theme}\nContent instructions: {channel_config.content_instructions}"
 
+    longform = channel_config is not None and channel_config.content_format == "longform"
+    if longform:
+        prompt = f"""Generate metadata for a standalone long-form YouTube video.
+Faithful, specific title suitable for a full video, at most 100 characters; useful description.
+No exaggerated claims. Distinguish facts from theories. No #shorts anywhere.
+Return ONLY:
+TITLE: ...
+DESCRIPTION: ...
+HASHTAGS: two to four relevant lowercase hashtags, no #shorts, #viral, #fyp or #trending
+Channel guidance: {channel_config.content_instructions}
+Narration: {script}
+"""
     prompt += "\n" + GLOBAL_GUARDRAIL_INSTRUCTIONS
 
     response = client.chat.completions.create(
@@ -63,7 +75,7 @@ Script:
             hashtags = [tag for tag in hashtags_text.split() if tag.startswith("#")]
 
     # Reuse generated topic tags; never invent categories when they are missing.
-    normalized = ["#shorts"]
+    normalized = [] if longform else ["#shorts"]
     seen = {"#shorts", "#viral", "#fyp", "#trending"}
     for tag in hashtags:
         tag = tag.lower()
@@ -74,6 +86,8 @@ Script:
         if len(normalized) == 5:
             break
 
+    if longform and (not title or len(title) > 100 or not description or "#shorts" in (title + description).lower()):
+        raise ValueError("Invalid long-form metadata")
     return {
         "Title": title,
         "Description": description,

@@ -41,7 +41,7 @@ class YouTubeCredentialContext:
             raise ValueError("Credential reference does not belong to channel")
         object.__setattr__(self, "credential_reference", reference)
         token = Path(YOUTUBE_TOKEN_FILE)
-        if self.channel != MINUTE_MYSTERIES:
+        if self.channel.channel_key != MINUTE_MYSTERIES.channel_key:
             token = token.parent / '.credentials' / self.channel.channel_key / 'token.pickle'
         self._bound['token_file'] = token
 
@@ -382,3 +382,18 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def upload_custom_thumbnail(video_id, thumbnail_path, *, credential_context):
+    """Optional post-upload operation; cannot insert a video or alter durable upload state."""
+    if not isinstance(video_id, str) or not video_id.strip():
+        raise ValueError('Existing video ID required')
+    path = Path(thumbnail_path)
+    if path.suffix.lower() not in ('.jpg', '.jpeg', '.png') or not 0 < path.stat().st_size < 2 * 1024 * 1024:
+        raise ValueError('Thumbnail must be a JPEG/PNG smaller than 2 MB')
+    service = credential_context.verified_service()
+    records = service.videos().list(part='snippet', id=video_id).execute().get('items', [])
+    if len(records) != 1 or records[0].get('snippet', {}).get('channelId') != credential_context.channel.youtube_channel_id:
+        raise ValueError('Thumbnail video does not belong to the verified channel')
+    return service.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(
+        str(path), mimetype='image/png' if path.suffix.lower() == '.png' else 'image/jpeg')).execute()

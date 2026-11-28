@@ -52,6 +52,15 @@ Rules:
             "Focus on documented unsolved mysteries", "Focus on documented facts within the configured topic")
         prompt += f"\nChannel: {channel_config.channel_name}\nContent instructions: {channel_config.content_instructions}"
 
+    longform = channel_config is not None and channel_config.content_format == "longform"
+    if longform:
+        prompt = f"""Generate exactly ONE fresh standalone long-form video idea about {topic}.
+Select a specific subject with enough documented evidence and narrative depth for 650-900 words.
+Independently select it; do not combine, expand, or depend on daily Shorts.
+A related Short does not disqualify a topic. Do not repeat any of this channel's prior LONG-FORM stories: {previous_ideas}
+{channel_config.content_instructions}
+Return only one identifiable idea title, under 20 words, with no numbering or commentary.
+"""
     prompt += "\n" + GLOBAL_GUARDRAIL_INSTRUCTIONS
 
     response = client.chat.completions.create(
@@ -78,6 +87,10 @@ Rules:
             seen.add(key)
     if ideas and not new_ideas:
         raise ContentGuardrailError("No eligible new ideas; normal generation retry required")
+
+    if longform:
+        if len(ideas) != 1 or len(new_ideas) != 1:
+            raise ContentGuardrailError("Long-form requires exactly one new eligible story")
 
     # Save updated memory
     memory.setdefault(topic, []).extend(new_ideas)

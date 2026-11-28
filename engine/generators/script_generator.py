@@ -41,6 +41,18 @@ Rules:
         prompt = prompt.replace("Mystery Shorts", "YouTube Shorts").replace("this unsolved mystery", "this topic")
         prompt += f"\nChannel: {channel_config.channel_name}\nTopic: {channel_config.topic_theme}\nContent instructions: {channel_config.content_instructions}"
 
+    if channel_config is not None and channel_config.content_format == "longform":
+        prompt = f"""Write a NEW standalone long-form narration about: {idea}
+Approximately 650-900 words, aiming for 4-6 minutes (up to 7 if naturally justified).
+Write exactly 10 compact paragraphs, each about 65-75 words. Aim for 700 words total.
+Budget the whole story before writing; do not give every structural section a long treatment.
+This is an independent story, not an expansion or compilation of Shorts.
+Natural spoken narration, strong opening, useful transitions, clear flow and satisfying ending.
+No filler, repeated facts, invented evidence, invented quotes, unsupported claims or padding.
+Separate established facts from theories; clearly qualify uncertainty and disputed details.
+{channel_config.content_instructions}
+Return only spoken narration, in paragraphs; no stage directions, headings or production notes.
+"""
     prompt += "\n" + GLOBAL_GUARDRAIL_INSTRUCTIONS
 
     response = client.chat.completions.create(
@@ -53,6 +65,17 @@ Rules:
     script = response.choices[0].message.content
 
     validate_content(script)
+    if channel_config is not None and channel_config.content_format == "longform":
+        if not 650 <= len(script.split()) <= 900:
+            # One bounded repair of this SAME standalone story, never a new topic.
+            correction = client.chat.completions.create(model="gpt-4.1-mini", messages=[
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": script},
+                {"role": "user", "content": f"The draft has {len(script.split())} words. Rewrite this same standalone story into exactly 10 compact paragraphs of 65-70 words each: target 650-700 words total, strictly within 650-900. Remove secondary details and repetition. Preserve factual discipline, narrative completeness and uncertainty; no padding. Return narration only."}])
+            script = correction.choices[0].message.content
+            validate_content(script)
+        if not 650 <= len(script.split()) <= 900:
+            raise ValueError(f"Long-form narration has {len(script.split())} words after bounded correction; no media generated")
     return script
 
 def split_opening(script):

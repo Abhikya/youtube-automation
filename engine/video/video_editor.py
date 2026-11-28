@@ -24,6 +24,7 @@ def _make_fast_cut_clips(
     target_duration: float,
     width: int,
     height: int,
+    content_format="shortform",
 ) -> List[VideoFileClip]:
     if not clip_paths:
         raise ValueError("No clip paths provided.")
@@ -33,7 +34,8 @@ def _make_fast_cut_clips(
     idx = 0
 
     pool = clip_paths[:]
-    random.shuffle(pool)
+    if content_format == "shortform":
+        random.shuffle(pool)
 
     while total < target_duration:
         clip_path = pool[idx % len(pool)]
@@ -41,7 +43,7 @@ def _make_fast_cut_clips(
 
         clip = VideoFileClip(clip_path)
 
-        cut_duration = random.uniform(0.8, 1.5)
+        cut_duration = random.uniform(8, 14) if content_format == "longform" else random.uniform(0.8, 1.5)
         remaining = target_duration - total
         cut_duration = min(cut_duration, remaining)
 
@@ -63,10 +65,11 @@ def _make_fast_cut_clips(
             height=height,
         )
 
-        zoom_factor = random.uniform(1.03, 1.10)
-        clip = clip.resized(
-            lambda t: 1 + (zoom_factor - 1) * (t / max(clip.duration, 0.1))
-        )
+        if content_format == "shortform":
+            zoom_factor = random.uniform(1.03, 1.10)
+            clip = clip.resized(
+                lambda t: 1 + (zoom_factor - 1) * (t / max(clip.duration, 0.1))
+            )
 
         segments.append(clip)
         total += clip.duration
@@ -89,19 +92,23 @@ def _build_subtitle_clips(
     current_start = 0.0
 
     for line in subtitles:
+        timed = isinstance(line, dict)
+        if timed:
+            current_start = line["start"]
+            per_sub_duration = line["end"] - line["start"]
         txt = TextClip(
-            text=line,
+            text=line["text"] if timed else line,
             font_size=font_size,
             color="white",
             stroke_color="black",
             stroke_width=4,
             method="caption",
             text_align="center",
-            size=(int(width * 0.9), int(height * 0.2)),
+            size=(int(width * 0.9), int(height * (0.12 if timed else 0.2))),
         )
 
         txt = txt.with_start(current_start).with_duration(per_sub_duration)
-        txt = txt.with_position(("center", int(height * 0.75)))
+        txt = txt.with_position(("center", int(height * (0.82 if timed else 0.75))))
         subtitle_clips.append(txt)
         current_start += per_sub_duration
 
@@ -117,7 +124,12 @@ def build_short_video(
     subtitles: Optional[List[str]] = None,
     music_path: Optional[str] = None,
     temp_audiofile: Optional[str] = None,
+    content_format: str = "shortform",
 ):
+    if content_format not in ("shortform", "longform"):
+        raise ValueError("Unknown content format")
+    if content_format == "longform" and (width, height) != (1920, 1080):
+        raise ValueError("Long-form requires 1920x1080")
     if not clips:
         raise ValueError("No clips provided.")
     if not audio_path:
@@ -131,6 +143,7 @@ def build_short_video(
         target_duration=voice_duration,
         width=width,
         height=height,
+        **({"content_format": content_format} if content_format == "longform" else {}),
     )
 
     base_video = concatenate_videoclips(visual_segments, method="compose")
@@ -141,6 +154,19 @@ def build_short_video(
     audio_layers = [voice_audio]
 
     music_audio = None
+    if music_path and content_format == "longform":
+        # Crossfade the existing music bed at joins rather than making a hard loop.
+        from pydub import AudioSegment
+        from pathlib import Path
+        source = AudioSegment.from_file(music_path)
+        if len(source) < 3000:
+            raise ValueError("Music bed is too short for a smooth long-form loop")
+        bed = source
+        while len(bed) < voice_duration * 1000:
+            bed = bed.append(source, crossfade=min(2000, len(source) // 4))
+        bed = bed[:int(voice_duration * 1000)].fade_in(1500).fade_out(2500)
+        music_path = str(Path(audio_path).with_name("longform-music.wav"))
+        bed.export(music_path, format="wav")
     if music_path:
         music_audio = AudioFileClip(music_path)
 
@@ -160,6 +186,7 @@ def build_short_video(
         total_duration=voice_duration,
         width=width,
         height=height,
+        **({"font_size": 42} if content_format == "longform" else {}),
     )
 
     final_video = CompositeVideoClip([base_video, *subtitle_layers], size=(width, height))
@@ -171,7 +198,8 @@ def build_short_video(
         codec="libx264",
         audio_codec="aac",
         preset="fast",
-        bitrate="800k",
+        bitrate="4000k" if content_format == "longform" else "800k",
+        **({"threads": 2} if content_format == "longform" else {}),
         **({"temp_audiofile": temp_audiofile} if temp_audiofile is not None else {}),
     )
 
