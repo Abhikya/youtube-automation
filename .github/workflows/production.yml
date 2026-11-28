@@ -10,10 +10,10 @@ on:
         type: string
         default: minute_mysteries
       operation:
-        description: Prepare tomorrow or conservatively clean historical READY batches
+        description: Prepare tomorrow (Shorts or long-form) or clean historical READY batches
         required: true
         type: choice
-        options: [prepare, cleanup]
+        options: [prepare, cleanup, prepare_longform, cleanup_longform]
         default: prepare
       day:
         description: 'Target publication date YYYY-MM-DD; blank means tomorrow in IST'
@@ -26,7 +26,7 @@ on:
         default: ''
 
 concurrency:
-  group: production-${{ inputs.channel_key || 'minute_mysteries' }}
+  group: production-${{ inputs.channel_key || 'minute_mysteries' }}${{ endsWith(inputs.operation, '_longform') && '-longform' || '' }}
   cancel-in-progress: false
   queue: max
 
@@ -69,7 +69,7 @@ jobs:
               output.write(f'youtube_channel_id={channel.youtube_channel_id}\n')
           PY
       - name: Install FFmpeg for preparation
-        if: inputs.operation != 'cleanup'
+        if: ${{ !startsWith(inputs.operation, 'cleanup') }}
         run: |
           sudo apt-get update
           sudo apt-get install --yes ffmpeg
@@ -83,13 +83,13 @@ jobs:
           INPUT_OPERATION: ${{ inputs.operation }}
           INPUT_DAY: ${{ inputs.day }}
           INPUT_CONFIRMED_NOT_UPLOADED_SLOT: ${{ inputs.confirmed_not_uploaded_slot }}
-          OPENAI_API_KEY: ${{ inputs.operation != 'cleanup' && secrets.OPENAI_API_KEY || '' }}
-          PEXELS_API_KEY: ${{ inputs.operation != 'cleanup' && secrets.PEXELS_API_KEY || '' }}
-          SELECTED_YOUTUBE_TOKEN: ${{ inputs.operation != 'cleanup' && secrets[steps.channel.outputs.credential_reference] || '' }}
+          OPENAI_API_KEY: ${{ !startsWith(inputs.operation, 'cleanup') && secrets.OPENAI_API_KEY || '' }}
+          PEXELS_API_KEY: ${{ !startsWith(inputs.operation, 'cleanup') && secrets.PEXELS_API_KEY || '' }}
+          SELECTED_YOUTUBE_TOKEN: ${{ !startsWith(inputs.operation, 'cleanup') && secrets[steps.channel.outputs.credential_reference] || '' }}
           CHANNEL_CREDENTIAL_REFERENCE: ${{ steps.channel.outputs.credential_reference }}
           YOUTUBE_CHANNEL_ID: ${{ steps.channel.outputs.youtube_channel_id }}
-          TELEGRAM_BOT_TOKEN: ${{ inputs.operation != 'cleanup' && secrets.TELEGRAM_BOT_TOKEN || '' }}
-          TELEGRAM_CHAT_ID: ${{ inputs.operation != 'cleanup' && secrets.TELEGRAM_CHAT_ID || '' }}
+          TELEGRAM_BOT_TOKEN: ${{ !startsWith(inputs.operation, 'cleanup') && secrets.TELEGRAM_BOT_TOKEN || '' }}
+          TELEGRAM_CHAT_ID: ${{ !startsWith(inputs.operation, 'cleanup') && secrets.TELEGRAM_CHAT_ID || '' }}
           YOUTUBE_PRIVACY_STATUS: private
           FFMPEG_BINARY: /usr/bin/ffmpeg
           IMAGEIO_FFMPEG_EXE: /usr/bin/ffmpeg

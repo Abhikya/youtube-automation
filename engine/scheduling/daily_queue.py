@@ -79,11 +79,13 @@ class DailyQueue:
         if not isinstance(data, dict) or data.get("date") != day.isoformat() or data.get("timezone") != SCHEDULER_TIMEZONE:
             raise ValueError("Queue date/timezone mismatch")
         validate_channel_identity(data, self.channel, allow_legacy=self.channel == MINUTE_MYSTERIES)
+        if data.get("content_format", "shortform") != self.channel.content_format:
+            raise ValueError("Queue format mismatch")
         videos = data.get("videos")
         if not isinstance(videos, list) or any(not isinstance(item, dict) for item in videos):
             raise ValueError("Queue videos must be a list of objects")
         slots = [item.get("slot") for item in videos]
-        if any(slot not in UPLOAD_TIMES for slot in slots) or len(slots) != len(set(slots)):
+        if any(slot not in self.channel.publication_slots for slot in slots) or len(slots) != len(set(slots)):
             raise ValueError("Queue contains invalid or duplicate slots")
         for item in videos:
             if "channel_key" in item and item["channel_key"] != self.channel.channel_key:
@@ -98,6 +100,8 @@ class DailyQueue:
 
     def _write(self, day, data):
         validate_channel_identity(data, self.channel, allow_legacy=self.channel == MINUTE_MYSTERIES)
+        if data.get("content_format", "shortform") != self.channel.content_format:
+            raise ValueError("Queue format mismatch")
         data.update(channel_identity(self.channel))
         for item in data["videos"]:
             if item.get("channel_key", self.channel.channel_key) != self.channel.channel_key:
@@ -137,8 +141,8 @@ class DailyQueue:
         if generator is None:
             from functools import partial
             generator = partial(generate_only, channel=self.channel)
-        slots = list(UPLOAD_TIMES if slots is None else slots)
-        if not slots or any(slot not in UPLOAD_TIMES for slot in slots) or len(set(slots)) != len(slots):
+        slots = list(self.channel.publication_slots if slots is None else slots)
+        if not slots or any(slot not in self.channel.publication_slots for slot in slots) or len(set(slots)) != len(slots):
             raise ValueError("Generation slots must be unique existing publishing slots")
         try:
             # Protect batches across threads AND independent scheduler processes.
@@ -230,7 +234,7 @@ class DailyQueue:
             return {"status": "skipped", "reason": "queue_or_state_error", "error_type": type(exc).__name__}
 
     def _upload_slot(self, slot, day=None, uploader=None, notifier=None, *, retry_failed=False):
-        if slot not in UPLOAD_TIMES:
+        if slot not in self.channel.publication_slots:
             raise ValueError(f"Unknown publishing slot: {slot}")
         if self.channel != MINUTE_MYSTERIES and uploader is None:
             raise ValueError("Non-default legacy upload requires an explicitly bound uploader")

@@ -30,7 +30,7 @@ def target_day(now, explicit=""):
 
 
 def publication_time(day, slot):
-    require(slot in UPLOAD_TIMES, "Unknown publication slot")
+    require(slot in (*UPLOAD_TIMES, "21:00"), "Unknown publication slot")
     hour, minute = map(int, slot.split(":"))
     return datetime(day.year, day.month, day.day, hour, minute, tzinfo=TZ).astimezone(timezone.utc).isoformat()
 
@@ -82,9 +82,11 @@ def validate_preparation(queue):
         require(all(verified_item(v, day, context["channel_id"]) for v in queue["videos"]),
                 "READY requires three verified scheduled videos")
         ids = [v["youtube"]["video_id"] for v in queue["videos"]]
-        require(len(set(ids)) == 3, "READY contains duplicate YouTube IDs")
+        expected_slots = ["21:00"] if queue.get("content_format") == "longform" else list(UPLOAD_TIMES)
+        require([v["slot"] for v in queue["videos"]] == expected_slots, "Preparation slots mismatch")
+        require(len(set(ids)) == len(expected_slots), "READY contains duplicate YouTube IDs")
         ready = datetime.fromisoformat(queue["ready_at"])
-        require(ready.utcoffset() is not None and ready < datetime.fromisoformat(publication_time(day, UPLOAD_TIMES[-1])),
+        require(ready.utcoffset() is not None and ready < datetime.fromisoformat(publication_time(day, expected_slots[-1])),
                 "READY receipt must precede final publication")
 
 
@@ -374,7 +376,7 @@ class Preparation(Production):
             require(instant.utcoffset() is not None, "Reconciliation clock must be timezone-aware")
             require(self.day in (instant.astimezone(TZ).date(), instant.astimezone(TZ).date() + timedelta(days=1)),
                     "Reconciliation requires today's or tomorrow's target")
-            require(slot in UPLOAD_TIMES and self._future(slot, clock), "Reconciliation slot must still be future")
+            require(slot in self.channel.publication_slots and self._future(slot, clock), "Reconciliation slot must still be future")
             data = self.queue.read(self.day)
             require(data.get("preparation", {}).get("channel_id") == expected_channel, "Reconciliation channel mismatch")
             item = next(v for v in data["videos"] if v["slot"] == slot)

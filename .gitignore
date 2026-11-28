@@ -17,3 +17,9 @@ data/manual_tests/
 token.json
 client_secret*.json
 .actions-work/
+
+# Independent long-form generated media and runner state
+output/longform/
+.actions-work*-longform/
+data/channels/*/longform/
+assets/clips_library/landscape_*

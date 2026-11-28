@@ -939,7 +939,7 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(re.findall(r"cron: '([^']+)'",s),[])
         self.assertNotIn("  schedule:",s)
         self.assertIn('queue: max',s);self.assertIn('cancel-in-progress: false',s)
-        self.assertIn('options: [prepare, cleanup]',s)
+        self.assertIn('options: [prepare, cleanup, prepare_longform, cleanup_longform]',s)
         self.assertIn('confirmed_not_uploaded_slot:',s)
         self.assertIn("INPUT_CONFIRMED_NOT_UPLOADED_SLOT: ${{ inputs.confirmed_not_uploaded_slot }}",s)
         self.assertIn("args.push('--confirmed-not-uploaded-slot', inputs.confirmed_not_uploaded_slot)",s)
